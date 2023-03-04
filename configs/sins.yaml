@@ -1,0 +1,38 @@
+data: 
+  f0_extractor: 'parselmouth' # 'parselmouth', 'dio', 'harvest', or 'crepe'
+  f0_min: 65 # about C2
+  f0_max: 800 # about G5
+  sampling_rate: 44100
+  block_size: 512 # Equal to hop_length
+  duration: 2 # Audio duration during training, must be less than the duration of the shortest audio clip
+  encoder: 'hubertsoft'
+  encoder_sample_rate: 16000
+  encoder_hop_size: 320
+  encoder_out_channels: 256
+  encoder_ckpt: pretrain/hubert/hubert-soft-0d54a1f4.pt
+  train_path: data/train # Create a folder named "audio" under this path and put the audio clip in it
+  valid_path: data/val # Create a folder named "audio" under this path and put the audio clip in it
+model:
+  type: 'Sins'
+  n_harmonics: 128
+  n_mag_allpass: 256
+  n_mag_noise: 256
+enhancer:
+    type: 'nsf-hifigan'
+    ckpt: 'pretrain/nsf_hifigan/model'
+loss:
+  fft_min: 256
+  fft_max: 2048
+  n_scale: 4 # rss kernel numbers
+device: cuda
+env:
+  expdir: exp/sins-test
+  gpu_id: 0
+train:
+  batch_size: 24
+  cache_all_data: true # Save Internal-Memory if it is false, but may be slow
+  epochs: 100000
+  interval_log: 1
+  interval_val: 2000
+  lr: 0.0005
+  weight_decay: 0
