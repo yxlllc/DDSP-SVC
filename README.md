@@ -1,3 +1,4 @@
+Language: **English** [简体中文](./cn_README.md)
 # DDSP-SVC
 <div align="center">
 <img src="https://storage.googleapis.com/ddsp/github_images/ddsp_logo.png" width="200px" alt="logo"></img>
