@@ -10,6 +10,7 @@ We recommend first installing PyTorch from the [**official website**](https://py
 ```bash
 pip install -r requirements.txt 
 ```
+NOTE : I only test the code using python 3.8 (windows) + pytorch 1.9.1 + torchaudio 0.6.0, too new or too old dependencies may not work
 ## 2. Configuring the pretrained model
 - **(Required)** Download the pretrained [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt)   encoder and put it under `pretrain/hubert` folder.
 -  Get the pretrained vocoder-based enhancer from the [DiffSinger Community Vocoders Project](https://openvpi.github.io/vocoders) and unzip it into `pretrain/` folder
