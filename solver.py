@@ -112,7 +112,7 @@ def train(args, initial_global_step, model, optimizer, loss_func, loader_train, 
                         batch_idx,
                         num_batches,
                         args.env.expdir,
-                        1/saver.get_interval_time(),
+                        args.train.interval_log/saver.get_interval_time(),
                         loss.item(),
                         saver.get_total_time(),
                         saver.global_step
