@@ -56,7 +56,7 @@ def parse_args(args=None, namespace=None):
         type=str,
         required=False,
         default='parselmouth',
-        help="pitch extrator type: parselmouth, dio, harvest, crepe",
+        help="pitch extrator type: parselmouth (default), dio, harvest, crepe",
     )
     parser.add_argument(
         "-fmin",
@@ -84,9 +84,10 @@ def split(audio, hop_size, chunks):
         if tag[0] != tag[1]:
             start_frame = int(int(tag[0]) // hop_size)
             end_frame = int(int(tag[1]) // hop_size)
-            result.append((
-                    start_frame, 
-                    audio[int(start_frame * hop_size) : int(end_frame * hop_size)]))
+            if end_frame > start_frame:
+                result.append((
+                        start_frame, 
+                        audio[int(start_frame * hop_size) : int(end_frame * hop_size)]))
     return result
 
 def cross_fade(a: np.ndarray, b: np.ndarray, idx: int):
