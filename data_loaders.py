@@ -55,14 +55,15 @@ def get_data_loaders(args, whole_audio=False):
         hop_size=args.data.block_size,
         sample_rate=args.data.sampling_rate,
         load_all_data=args.train.cache_all_data,
-        whole_audio=whole_audio)
+        whole_audio=whole_audio,
+        device=args.train.cache_device)
     loader_train = torch.utils.data.DataLoader(
         data_train ,
         batch_size=args.train.batch_size if not whole_audio else 1,
         shuffle=True,
-        num_workers=args.train.num_workers,
-        persistent_workers=(args.train.num_workers > 0),
-        pin_memory=True
+        num_workers=args.train.num_workers if args.train.cache_device=='cpu' else 0,
+        persistent_workers=(args.train.num_workers > 0) if args.train.cache_device=='cpu' else False,
+        pin_memory=True if args.train.cache_device=='cpu' else False
     )
     data_valid = AudioDataset(
         args.data.valid_path,
@@ -91,6 +92,7 @@ class AudioDataset(Dataset):
         sample_rate,
         load_all_data=True,
         whole_audio=False,
+        device = 'cpu'
     ):
         super().__init__()
         
@@ -117,21 +119,21 @@ class AudioDataset(Dataset):
             
             path_f0 = os.path.join(self.path_root, 'f0', name) + '.npy'
             f0 = np.load(path_f0)
-            f0 = torch.from_numpy(f0).float().unsqueeze(-1)
+            f0 = torch.from_numpy(f0).float().unsqueeze(-1).to(device)
                 
             path_volume = os.path.join(self.path_root, 'volume', name) + '.npy'
             volume = np.load(path_volume)
-            volume = torch.from_numpy(volume).float().unsqueeze(-1)
+            volume = torch.from_numpy(volume).float().unsqueeze(-1).to(device)
             
             if load_all_data:
                 audio, sr = librosa.load(path_audio, sr=self.sample_rate)
                 if len(audio.shape) > 1:
                     audio = librosa.to_mono(audio)
-                audio = torch.from_numpy(audio).float()
+                audio = torch.from_numpy(audio).float().to(device)
                 
                 path_units = os.path.join(self.path_root, 'units', name) + '.npy'
                 units = np.load(path_units)
-                units = torch.from_numpy(units).float()
+                units = torch.from_numpy(units).float().to(device)
                 
                 self.data_buffer[name] = {
                         'duration': duration,
