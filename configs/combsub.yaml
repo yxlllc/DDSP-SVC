@@ -1,5 +1,5 @@
 data:
-  f0_extractor: 'parselmouth' # 'parselmouth' (singing) or 'dio' (speech) or 'harvest' (speech)
+  f0_extractor: 'parselmouth' # 'parselmouth', 'dio', 'harvest', or 'crepe'
   f0_min: 65 # about C2
   f0_max: 800 # about G5
   sampling_rate: 44100
@@ -26,9 +26,10 @@ loss:
   n_scale: 4 # rss kernel numbers
 device: cuda
 env:
-  expdir: exp/combsub-test
+  expdir: exp/combsub-test4
   gpu_id: 0
 train:
+  num_workers: 4 
   batch_size: 24
   cache_all_data: true # Save Internal-Memory if it is false, but may be slow
   epochs: 100000

@@ -29,6 +29,7 @@ env:
   expdir: exp/sins-test
   gpu_id: 0
 train:
+  num_workers: 4 
   batch_size: 24
   cache_all_data: true # Save Internal-Memory if it is false, but may be slow
   epochs: 100000
