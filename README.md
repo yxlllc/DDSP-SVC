@@ -54,6 +54,9 @@ You can also finetune the model if you interrupt training first, then re-preproc
 # check the training status using tensorboard
 tensorboard --logdir=exp
 ```
+Test audio samples will be visible in TensorBoard after the first validation.
+
+Note: The test audio samples in Tensorboard are the original outputs of your DDSP-SVC model that is not enhanced by an enhancer. If you want to test the synthetic effect after using the enhancer  (which may have higher quality) , please use the method described in the following chapter.
 ## 6. Testing
 ```bash
 # origin output of ddsp-svc

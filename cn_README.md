@@ -60,6 +60,9 @@ python train.py -c configs/combsub.yaml
 # 使用tensorboard检查训练状态
 tensorboard --logdir=exp
 ```
+第一次验证 (validation) 后，在 TensorBoard 中可以看到合成后的测试音频。
+
+注：TensorBoard 中的测试音频是 DDSP-SVC 模型的原始输出，并未通过增强器增强。 如果想测试模型使用增强器的合成效果（可能具有更高的合成质量），请使用下一章中描述的方法。
 ## 6. 测试
 ```bash
 # 以下是 ddsp-svc 变声器的原始输出
