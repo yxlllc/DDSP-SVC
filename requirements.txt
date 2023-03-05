@@ -12,7 +12,5 @@ resampy
 scikit_learn
 scipy
 SoundFile
-torch
-torchaudio
 torchcrepe
 tqdm
