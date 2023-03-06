@@ -97,11 +97,11 @@ class SvcDDSP:
         mask = np.pad(mask, (4, 4), constant_values=(mask[0], mask[-1]))
         mask = np.array([np.max(mask[n : n + 9]) for n in range(len(mask) - 8)])
         mask = torch.from_numpy(mask).float().to(self.device).unsqueeze(-1).unsqueeze(0)
-        mask = upsample(mask, args.data.block_size).squeeze(-1)
+        mask = upsample(mask, self.args.data.block_size).squeeze(-1)
         volume = torch.from_numpy(volume).float().to(self.device).unsqueeze(-1).unsqueeze(0)
 
         # extract units
-        audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(device)
+        audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(self.device)
         units = self.units_encoder.encode(audio_t, sample_rate, hop_size)
         
         # forward and return the output
