@@ -55,8 +55,8 @@ def parse_args(args=None, namespace=None):
         "--pitch_extractor",
         type=str,
         required=False,
-        default='parselmouth',
-        help="pitch extrator type: parselmouth, dio, harvest, crepe",
+        default='crepe',
+        help="pitch extrator type: parselmouth, dio, harvest, crepe (default)",
     )
     parser.add_argument(
         "-fmin",
@@ -89,9 +89,10 @@ def split(audio, sample_rate, hop_size, db_thresh = -40, min_len = 5000):
         if tag[0] != tag[1]:
             start_frame = int(int(tag[0]) // hop_size)
             end_frame = int(int(tag[1]) // hop_size)
-            result.append((
-                    start_frame, 
-                    audio[int(start_frame * hop_size) : int(end_frame * hop_size)]))
+            if end_frame > start_frame:
+                result.append((
+                        start_frame, 
+                        audio[int(start_frame * hop_size) : int(end_frame * hop_size)]))
     return result
 
 
@@ -138,6 +139,8 @@ if __name__ == '__main__':
     volume_extractor = Volume_Extractor(hop_size)
     volume = volume_extractor.extract(audio)
     volume = torch.from_numpy(volume).float().to(device).unsqueeze(-1).unsqueeze(0)
+    
+
     
     # load units encoder
     units_encoder = Units_Encoder(
