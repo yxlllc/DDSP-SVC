@@ -6,7 +6,7 @@ import numpy as np
 import soundfile as sf
 import pyworld as pw
 import parselmouth
-import slicer
+from slicer import Slicer
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
 from enhancer import Enhancer
 
@@ -55,8 +55,8 @@ def parse_args(args=None, namespace=None):
         "--pitch_extractor",
         type=str,
         required=False,
-        default='crepe',
-        help="pitch extrator type: parselmouth, dio, harvest, crepe (default)",
+        default='parselmouth',
+        help="pitch extrator type: parselmouth, dio, harvest, crepe",
     )
     parser.add_argument(
         "-fmin",
@@ -76,19 +76,24 @@ def parse_args(args=None, namespace=None):
     )
     return parser.parse_args(args=args, namespace=namespace)
 
-def split(audio, hop_size, chunks):
-    chunks = dict(chunks)
+    
+def split(audio, sample_rate, hop_size, db_thresh = -40, min_len = 5000):
+    slicer = Slicer(
+                sr=sample_rate,
+                threshold=db_thresh,
+                min_length=min_len)       
+    chunks = dict(slicer.slice(audio))
     result = []
     for k, v in chunks.items():
         tag = v["split_time"].split(",")
         if tag[0] != tag[1]:
             start_frame = int(int(tag[0]) // hop_size)
             end_frame = int(int(tag[1]) // hop_size)
-            if end_frame > start_frame:
-                result.append((
-                        start_frame, 
-                        audio[int(start_frame * hop_size) : int(end_frame * hop_size)]))
+            result.append((
+                    start_frame, 
+                    audio[int(start_frame * hop_size) : int(end_frame * hop_size)]))
     return result
+
 
 def cross_fade(a: np.ndarray, b: np.ndarray, idx: int):
     result = np.zeros(idx + b.shape[0])
@@ -98,7 +103,8 @@ def cross_fade(a: np.ndarray, b: np.ndarray, idx: int):
     result[idx: a.shape[0]] = (1 - k) * a[idx:] + k * b[: fade_len]
     np.copyto(dst=result[a.shape[0]:], src=b[fade_len:])
     return result
-    
+
+
 if __name__ == '__main__':
     #device = 'cpu' 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -133,9 +139,6 @@ if __name__ == '__main__':
     volume = volume_extractor.extract(audio)
     volume = torch.from_numpy(volume).float().to(device).unsqueeze(-1).unsqueeze(0)
     
-    chunks = slicer.cut(cmd.input, db_thresh = -40)
-    segments = split(audio, hop_size, chunks)
-    
     # load units encoder
     units_encoder = Units_Encoder(
                         args.data.encoder, 
@@ -151,6 +154,7 @@ if __name__ == '__main__':
     # forward and save the output
     result = np.zeros(0)
     current_length = 0
+    segments = split(audio, sample_rate, hop_size)
     with torch.no_grad():
         for segment in segments:
             start_frame = segment[0]
