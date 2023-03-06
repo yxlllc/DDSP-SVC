@@ -82,6 +82,7 @@ class F0_Extractor:
             uv = f0 == 0
             if len(f0[~uv]) > 0:
                 f0[uv] = np.interp(np.where(uv)[0], np.where(~uv)[0], f0[~uv])
+            f0[f0 < self.f0_min] = self.f0_min
         return f0
 
 

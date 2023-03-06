@@ -9,8 +9,6 @@ from flask import Flask, request, send_file
 from flask_cors import CORS
 
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
-from main import split
-from main import cross_fade
 from enhancer import Enhancer
 
 
@@ -55,8 +53,10 @@ class SvcDDSP:
         self.f0_min = f0_min
         self.f0_max = f0_max
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        
         # load ddsp model
         self.model, self.args = load_model(self.model_path, device=self.device)
+        
         # load units encoder
         self.units_encoder = Units_Encoder(
             self.args.data.encoder,
@@ -64,6 +64,7 @@ class SvcDDSP:
             self.args.data.encoder_sample_rate,
             self.args.data.encoder_hop_size,
             device=self.device)
+        
         # load enhancer
         if self.vocoder_based_enhancer:
             self.enhancer = Enhancer(self.args.enhancer.type, self.args.enhancer.ckpt, device=self.device)
@@ -75,6 +76,7 @@ class SvcDDSP:
         if len(audio.shape) > 1:
             audio = librosa.to_mono(audio)
         hop_size = self.args.data.block_size * sample_rate / self.args.data.sampling_rate
+        
         # extract f0
         pitch_extractor = F0_Extractor(
             self.input_pitch_extractor,
@@ -85,43 +87,25 @@ class SvcDDSP:
         f0 = pitch_extractor.extract(audio, uv_interp=True, device=self.device)
         f0 = torch.from_numpy(f0).float().to(self.device).unsqueeze(-1).unsqueeze(0)
         f0 = f0 * 2 ** (float(pitch_adjust) / 12)
+        
         # extract volume
         volume_extractor = Volume_Extractor(hop_size)
         volume = volume_extractor.extract(audio)
         volume = torch.from_numpy(volume).float().to(self.device).unsqueeze(-1).unsqueeze(0)
-        chunks = slicer.cut(audio, db_thresh=-40, flask_mode=True, flask_sr=sample_rate)
-        segments = split(audio, hop_size, chunks)
+
+        # extract units
+        units = self.units_encoder.encode(audio, sample_rate, hop_size)
+        
         # forward and return the output
-        result = np.zeros(0)
-        current_length = 0
         with torch.no_grad():
-            for segment in segments:
-                start_frame = segment[0]
-                seg_input = torch.from_numpy(segment[1]).float().unsqueeze(0).to(self.device)
-                seg_units = self.units_encoder.encode(seg_input, sample_rate, hop_size)
+            output, _, (s_h, s_n) = self.model(units, f0, volume)
+            if self.vocoder_based_enhancer:
+                output, output_sample_rate = self.enhancer.enhance(output, self.args.data.sampling_rate, f0, self.args.data.block_size)
+            else:
+                output_sample_rate = self.args.data.sampling_rate
 
-                seg_f0 = f0[:, start_frame: start_frame + seg_units.size(1), :]
-                seg_volume = volume[:, start_frame: start_frame + seg_units.size(1), :]
-
-                seg_output, _, (s_h, s_n) = self.model(seg_units, seg_f0, seg_volume)
-
-                if self.vocoder_based_enhancer:
-                    seg_output, output_sample_rate = self.enhancer.enhance(seg_output, self.args.data.sampling_rate,
-                                                                           seg_f0, self.args.data.block_size)
-                else:
-                    output_sample_rate = self.args.data.sampling_rate
-
-                seg_output = seg_output.squeeze().cpu().numpy()
-
-                silent_length = round(
-                    start_frame * self.args.data.block_size * output_sample_rate / self.args.data.sampling_rate) - current_length
-                if silent_length >= 0:
-                    result = np.append(result, np.zeros(silent_length))
-                    result = np.append(result, seg_output)
-                else:
-                    result = cross_fade(result, seg_output, current_length + silent_length)
-                current_length = current_length + silent_length + len(seg_output)
-            return result, output_sample_rate
+            output = output.squeeze().cpu().numpy()
+            return output, output_sample_rate
 
 
 if __name__ == "__main__":
@@ -130,10 +114,9 @@ if __name__ == "__main__":
     # flask部分来自diffsvc小狼大佬编写的代码。
     # config和模型得同一目录。
     checkpoint_path = "exp/combsub-test/model_550000.pt"
-    # 是否使用预训练的基于声码器的增强器增强输出，正常声音范围内的高音频质量，但速度较慢。
+    # 是否使用预训练的基于声码器的增强器增强输出，正常音域范围内的高音频质量，但对硬件要求更高。
     use_vocoder_based_enhancer = True
-    # f0提取器，有parselmouth, dio, harvest, crepe。
-    # 由于目前没有对空值进行处理，所以尝试推理完全没有声音的片段会报错或者意外的噪声输出。vst插件的实时模式可能会碰上这些问题。
+    # f0提取器，有parselmouth, dio, harvest, crepe
     select_pitch_extractor = 'crepe'
     # f0范围限制(Hz)
     limit_f0_min = 50
