@@ -94,7 +94,8 @@ class SvcDDSP:
         volume = torch.from_numpy(volume).float().to(self.device).unsqueeze(-1).unsqueeze(0)
 
         # extract units
-        units = self.units_encoder.encode(audio, sample_rate, hop_size)
+        audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(device)
+        units = self.units_encoder.encode(audio_t, sample_rate, hop_size)
         
         # forward and return the output
         with torch.no_grad():
