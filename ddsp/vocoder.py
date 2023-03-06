@@ -80,7 +80,8 @@ class F0_Extractor:
         # interpolate the unvoiced f0 
         if uv_interp:
             uv = f0 == 0
-            f0[uv] = np.interp(np.where(uv)[0], np.where(~uv)[0], f0[~uv])
+            if len(f0[~uv]) > 0:
+                f0[uv] = np.interp(np.where(uv)[0], np.where(~uv)[0], f0[~uv])
         return f0
 
 
