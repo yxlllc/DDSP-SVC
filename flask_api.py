@@ -9,6 +9,7 @@ from flask import Flask, request, send_file
 from flask_cors import CORS
 
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
+from ddsp.core import upsample
 from enhancer import Enhancer
 
 
@@ -46,12 +47,13 @@ def voice_change_model():
 
 class SvcDDSP:
     def __init__(self, model_path, vocoder_based_enhancer, input_pitch_extractor,
-                 f0_min, f0_max):
+                 f0_min, f0_max, threhold):
         self.model_path = model_path
         self.vocoder_based_enhancer = vocoder_based_enhancer
         self.input_pitch_extractor = input_pitch_extractor
         self.f0_min = f0_min
         self.f0_max = f0_max
+        self.threhold = threhold
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
         # load ddsp model
@@ -91,15 +93,21 @@ class SvcDDSP:
         # extract volume
         volume_extractor = Volume_Extractor(hop_size)
         volume = volume_extractor.extract(audio)
+        mask = (volume > 10 ** (float(self.threhold) / 20)).astype('float')
+        mask = np.pad(mask, (4, 4), constant_values=(mask[0], mask[-1]))
+        mask = np.array([np.max(mask[n : n + 9]) for n in range(len(mask) - 8)])
+        mask = torch.from_numpy(mask).float().to(self.device).unsqueeze(-1).unsqueeze(0)
+        mask = upsample(mask, args.data.block_size).squeeze(-1)
         volume = torch.from_numpy(volume).float().to(self.device).unsqueeze(-1).unsqueeze(0)
 
         # extract units
-        audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(self.device)
+        audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(device)
         units = self.units_encoder.encode(audio_t, sample_rate, hop_size)
         
         # forward and return the output
         with torch.no_grad():
             output, _, (s_h, s_n) = self.model(units, f0, volume)
+            output *= mask
             if self.vocoder_based_enhancer:
                 output, output_sample_rate = self.enhancer.enhance(output, self.args.data.sampling_rate, f0, self.args.data.block_size)
             else:
@@ -122,13 +130,15 @@ if __name__ == "__main__":
     # f0范围限制(Hz)
     limit_f0_min = 50
     limit_f0_max = 1100
+    # 音量响应阈值(dB)
+    threhold = -60
     # 默认说话人。以及是否优先使用默认说话人覆盖vst传入的参数。
     # 但是ddsp-svc现在还没有多说话人，所以此参数无效。
     spk_id = 37
     enable_spk_id_cover = True
 
     svc_model = SvcDDSP(checkpoint_path, use_vocoder_based_enhancer, select_pitch_extractor,
-                        limit_f0_min, limit_f0_max)
+                        limit_f0_min, limit_f0_max, threhold)
 
     # 此处与vst插件对应，端口必须接上。
     app.run(port=6844, host="0.0.0.0", debug=False, threaded=False)

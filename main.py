@@ -8,6 +8,7 @@ import pyworld as pw
 import parselmouth
 from slicer import Slicer
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
+from ddsp.core import upsample
 from enhancer import Enhancer
 
 def parse_args(args=None, namespace=None):
@@ -40,7 +41,7 @@ def parse_args(args=None, namespace=None):
         type=str,
         required=False,
         default=0,
-        help="key changed (number of semitones)",
+        help="key changed (number of semitones) | default: 0",
     )
     parser.add_argument(
         "-e",
@@ -48,7 +49,7 @@ def parse_args(args=None, namespace=None):
         type=str,
         required=False,
         default='false',
-        help="true or false",
+        help="true or false | default: false",
     )
     parser.add_argument(
         "-pe",
@@ -64,7 +65,7 @@ def parse_args(args=None, namespace=None):
         type=str,
         required=False,
         default=50,
-        help="min f0 (Hz)",
+        help="min f0 (Hz) | default: 50",
     )
     parser.add_argument(
         "-fmax",
@@ -72,7 +73,15 @@ def parse_args(args=None, namespace=None):
         type=str,
         required=False,
         default=1100,
-        help="max f0 (Hz)",
+        help="max f0 (Hz) | default: 1100",
+    )
+    parser.add_argument(
+        "-th",
+        "--threhold",
+        type=str,
+        required=False,
+        default=-60,
+        help="response threhold (dB) | default: -60",
     )
     return parser.parse_args(args=args, namespace=namespace)
 
@@ -133,14 +142,17 @@ if __name__ == '__main__':
     f0 = torch.from_numpy(f0).float().to(device).unsqueeze(-1).unsqueeze(0)
    
     # key change
-    f0 = f0 * 2** ( float(cmd.key) / 12)
+    f0 = f0 * 2 ** (float(cmd.key) / 12)
     
     # extract volume 
     volume_extractor = Volume_Extractor(hop_size)
     volume = volume_extractor.extract(audio)
+    mask = (volume > 10 ** (float(cmd.threhold) / 20)).astype('float')
+    mask = np.pad(mask, (4, 4), constant_values=(mask[0], mask[-1]))
+    mask = np.array([np.max(mask[n : n + 9]) for n in range(len(mask) - 8)])
+    mask = torch.from_numpy(mask).float().to(device).unsqueeze(-1).unsqueeze(0)
+    mask = upsample(mask, args.data.block_size).squeeze(-1)
     volume = torch.from_numpy(volume).float().to(device).unsqueeze(-1).unsqueeze(0)
-    
-
     
     # load units encoder
     units_encoder = Units_Encoder(
@@ -168,7 +180,8 @@ if __name__ == '__main__':
             seg_volume = volume[:, start_frame : start_frame + seg_units.size(1), :]
             
             seg_output, _, (s_h, s_n) = model(seg_units, seg_f0, seg_volume)
-
+            seg_output *= mask[:, start_frame * args.data.block_size : (start_frame + seg_units.size(1)) * args.data.block_size]
+            
             if cmd.enhance == 'true':
                 seg_output, output_sample_rate = enhancer.enhance(seg_output, args.data.sampling_rate, seg_f0, args.data.block_size)
             else:
