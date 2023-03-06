@@ -96,19 +96,19 @@ class Slicer:
             return {"0": {"slice": False, "split_time": f"0,{len(waveform)}"}}
         else:
             chunks = []
-            # µÚÒ»¶Î¾²Òô²¢·Ç´ÓÍ·¿ªÊ¼£¬²¹ÉÏÓĞÉùÆ¬¶Î
+            # ç¬¬ä¸€æ®µé™éŸ³å¹¶éä»å¤´å¼€å§‹ï¼Œè¡¥ä¸Šæœ‰å£°ç‰‡æ®µ
             if sil_tags[0][0]:
                 chunks.append(
                     {"slice": False, "split_time": f"0,{min(waveform.shape[0], sil_tags[0][0] * self.hop_size)}"})
             for i in range(0, len(sil_tags)):
-                # ±êÊ¶ÓĞÉùÆ¬¶Î£¨Ìø¹ıµÚÒ»¶Î£©
+                # æ ‡è¯†æœ‰å£°ç‰‡æ®µï¼ˆè·³è¿‡ç¬¬ä¸€æ®µï¼‰
                 if i:
                     chunks.append({"slice": False,
                                    "split_time": f"{sil_tags[i - 1][1] * self.hop_size},{min(waveform.shape[0], sil_tags[i][0] * self.hop_size)}"})
-                # ±êÊ¶ËùÓĞ¾²ÒôÆ¬¶Î
+                # æ ‡è¯†æ‰€æœ‰é™éŸ³ç‰‡æ®µ
                 chunks.append({"slice": True,
                                "split_time": f"{sil_tags[i][0] * self.hop_size},{min(waveform.shape[0], sil_tags[i][1] * self.hop_size)}"})
-            # ×îºóÒ»¶Î¾²Òô²¢·Ç½áÎ²£¬²¹ÉÏ½áÎ²Æ¬¶Î
+            # æœ€åä¸€æ®µé™éŸ³å¹¶éç»“å°¾ï¼Œè¡¥ä¸Šç»“å°¾ç‰‡æ®µ
             if sil_tags[-1][1] * self.hop_size < len(waveform):
                 chunks.append({"slice": False, "split_time": f"{sil_tags[-1][1] * self.hop_size},{len(waveform)}"})
             chunk_dict = {}
@@ -117,8 +117,12 @@ class Slicer:
             return chunk_dict
 
 
-def cut(audio_path, db_thresh=-30, min_len=5000):
-    audio, sr = librosa.load(audio_path, sr=None)
+def cut(audio_path, db_thresh=-30, min_len=5000, flask_mode=False, flask_sr=None):
+    if not flask_mode:
+        audio, sr = librosa.load(audio_path, sr=None)
+    else:
+        audio = audio_path
+        sr = flask_sr
     slicer = Slicer(
         sr=sr,
         threshold=db_thresh,
