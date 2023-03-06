@@ -17,16 +17,12 @@ def load_model(model_path, device='cuda'):
     with open(config_file) as f:
         data = f.read()
 
-    global h
     json_config = json.loads(data)
     h = AttrDict(json_config)
 
     generator = Generator(h).to(device)
 
-    if torch.cuda.is_available():
-        cp_dict = torch.load(model_path)
-    else:
-        cp_dict = torch.load(model_path, map_location="cpu")
+    cp_dict = torch.load(model_path, map_location=device)
     generator.load_state_dict(cp_dict['generator'])
     generator.eval()
     generator.remove_weight_norm()
@@ -98,59 +94,6 @@ class ResBlock2(torch.nn.Module):
             remove_weight_norm(l)
 
 
-class Generator(torch.nn.Module):
-    def __init__(self, h):
-        super(Generator, self).__init__()
-        self.h = h
-        self.num_kernels = len(h.resblock_kernel_sizes)
-        self.num_upsamples = len(h.upsample_rates)
-        self.conv_pre = weight_norm(Conv1d(h.num_mels, h.upsample_initial_channel, 7, 1, padding=3))
-        resblock = ResBlock1 if h.resblock == '1' else ResBlock2
-
-        self.ups = nn.ModuleList()
-        for i, (u, k) in enumerate(zip(h.upsample_rates, h.upsample_kernel_sizes)):
-            self.ups.append(weight_norm(
-                ConvTranspose1d(h.upsample_initial_channel // (2 ** i), h.upsample_initial_channel // (2 ** (i + 1)),
-                                k, u, padding=(k - u) // 2)))
-
-        self.resblocks = nn.ModuleList()
-        for i in range(len(self.ups)):
-            ch = h.upsample_initial_channel // (2 ** (i + 1))
-            for j, (k, d) in enumerate(zip(h.resblock_kernel_sizes, h.resblock_dilation_sizes)):
-                self.resblocks.append(resblock(h, ch, k, d))
-
-        self.conv_post = weight_norm(Conv1d(ch, 1, 7, 1, padding=3))
-        self.ups.apply(init_weights)
-        self.conv_post.apply(init_weights)
-
-    def forward(self, x):
-        x = self.conv_pre(x)
-        for i in range(self.num_upsamples):
-            x = F.leaky_relu(x, LRELU_SLOPE)
-            x = self.ups[i](x)
-            xs = None
-            for j in range(self.num_kernels):
-                if xs is None:
-                    xs = self.resblocks[i * self.num_kernels + j](x)
-                else:
-                    xs += self.resblocks[i * self.num_kernels + j](x)
-            x = xs / self.num_kernels
-        x = F.leaky_relu(x)
-        x = self.conv_post(x)
-        x = torch.tanh(x)
-
-        return x
-
-    def remove_weight_norm(self):
-        print('Removing weight norm...')
-        for l in self.ups:
-            remove_weight_norm(l)
-        for l in self.resblocks:
-            l.remove_weight_norm()
-        remove_weight_norm(self.conv_pre)
-        remove_weight_norm(self.conv_post)
-
-
 class SineGen(torch.nn.Module):
     """ Definition of sine generator
     SineGen(samp_rate, harmonic_num = 0,
@@ -169,8 +112,7 @@ class SineGen(torch.nn.Module):
 
     def __init__(self, samp_rate, harmonic_num=0,
                  sine_amp=0.1, noise_std=0.003,
-                 voiced_threshold=0,
-                 flag_for_pulse=False):
+                 voiced_threshold=0):
         super(SineGen, self).__init__()
         self.sine_amp = sine_amp
         self.noise_std = noise_std
@@ -178,100 +120,56 @@ class SineGen(torch.nn.Module):
         self.dim = self.harmonic_num + 1
         self.sampling_rate = samp_rate
         self.voiced_threshold = voiced_threshold
-        self.flag_for_pulse = flag_for_pulse
 
     def _f02uv(self, f0):
         # generate uv signal
-        uv = (f0 > self.voiced_threshold).type(torch.float32)
+        uv = torch.ones_like(f0)
+        uv = uv * (f0 > self.voiced_threshold)
         return uv
 
-    def _f02sine(self, f0_values):
-        """ f0_values: (batchsize, length, dim)
-            where dim indicates fundamental tone and overtones
-        """
-        # convert to F0 in rad. The interger part n can be ignored
-        # because 2 * np.pi * n doesn't affect phase
-        rad_values = (f0_values / self.sampling_rate) % 1
-
-        # initial phase noise (no noise for fundamental component)
-        rand_ini = torch.rand(f0_values.shape[0], f0_values.shape[2], \
-                              device=f0_values.device)
-        rand_ini[:, 0] = 0
-        rad_values[:, 0, :] = rad_values[:, 0, :] + rand_ini
-
-        # instantanouse phase sine[t] = sin(2*pi \sum_i=1 ^{t} rad)
-        if not self.flag_for_pulse:
-            # for normal case
-
-            # To prevent torch.cumsum numerical overflow,
-            # it is necessary to add -1 whenever \sum_k=1^n rad_value_k > 1.
-            # Buffer tmp_over_one_idx indicates the time step to add -1.
-            # This will not change F0 of sine because (x-1) * 2*pi = x * 2*pi
-            tmp_over_one = torch.cumsum(rad_values, 1) % 1
-            tmp_over_one_idx = (torch.diff(tmp_over_one, dim=1)) < 0
-            cumsum_shift = torch.zeros_like(rad_values)
-            cumsum_shift[:, 1:, :] = tmp_over_one_idx * -1.0
-
-            sines = torch.sin(torch.cumsum(rad_values + cumsum_shift, dim=1)
-                              * 2 * np.pi)
-        else:
-            # If necessary, make sure that the first time step of every
-            # voiced segments is sin(pi) or cos(0)
-            # This is used for pulse-train generation
-
-            # identify the last time step in unvoiced segments
-            uv = self._f02uv(f0_values)
-            uv_1 = torch.roll(uv, shifts=-1, dims=1)
-            uv_1[:, -1, :] = 1
-            u_loc = (uv < 1) * (uv_1 > 0)
-
-            # get the instantanouse phase
-            tmp_cumsum = torch.cumsum(rad_values, dim=1)
-            # different batch needs to be processed differently
-            for idx in range(f0_values.shape[0]):
-                temp_sum = tmp_cumsum[idx, u_loc[idx, :, 0], :]
-                temp_sum[1:, :] = temp_sum[1:, :] - temp_sum[0:-1, :]
-                # stores the accumulation of i.phase within
-                # each voiced segments
-                tmp_cumsum[idx, :, :] = 0
-                tmp_cumsum[idx, u_loc[idx, :, 0], :] = temp_sum
-
-            # rad_values - tmp_cumsum: remove the accumulation of i.phase
-            # within the previous voiced segment.
-            i_phase = torch.cumsum(rad_values - tmp_cumsum, dim=1)
-
-            # get the sines
-            sines = torch.cos(i_phase * 2 * np.pi)
-        return sines
-
-    def forward(self, f0):
+    @torch.no_grad()
+    def forward(self, f0, upp):
         """ sine_tensor, uv = forward(f0)
         input F0: tensor(batchsize=1, length, dim=1)
                   f0 for unvoiced steps should be 0
         output sine_tensor: tensor(batchsize=1, length, dim)
         output uv: tensor(batchsize=1, length, 1)
         """
-        with torch.no_grad():
-            # fundamental component
-            fn = torch.multiply(f0, torch.arange(1, self.harmonic_num + 2, device=f0.device))
-
-            # generate sine waveforms
-            sine_waves = self._f02sine(fn) * self.sine_amp
-
-            # generate uv signal
-            # uv = torch.ones(f0.shape)
-            # uv = uv * (f0 > self.voiced_threshold)
-            uv = self._f02uv(f0)
-
-            # noise: for unvoiced should be similar to sine_amp
-            #        std = self.sine_amp/3 -> max value ~ self.sine_amp
-            # .       for voiced regions is self.noise_std
-            noise_amp = uv * self.noise_std + (1 - uv) * self.sine_amp / 3
-            noise = noise_amp * torch.randn_like(sine_waves)
-
-            # first: set the unvoiced part to 0 by uv
-            # then: additive noise
-            sine_waves = sine_waves * uv + noise
+        f0 = f0.unsqueeze(-1)
+        fn = torch.multiply(f0, torch.arange(1, self.dim + 1, device=f0.device).reshape((1, 1, -1)))
+        rad_values = (fn / self.sampling_rate) % 1  ###%1意味着n_har的乘积无法后处理优化
+        rand_ini = torch.rand(fn.shape[0], fn.shape[2], device=fn.device)
+        rand_ini[:, 0] = 0
+        rad_values[:, 0, :] = rad_values[:, 0, :] + rand_ini
+        is_half = rad_values.dtype is not torch.float32
+        tmp_over_one = torch.cumsum(rad_values.double(), 1)  # % 1  #####%1意味着后面的cumsum无法再优化
+        if is_half:
+            tmp_over_one = tmp_over_one.half()
+        else:
+            tmp_over_one = tmp_over_one.float()
+        tmp_over_one *= upp
+        tmp_over_one = F.interpolate(
+            tmp_over_one.transpose(2, 1), scale_factor=upp,
+            mode='linear', align_corners=True
+        ).transpose(2, 1)
+        rad_values = F.interpolate(rad_values.transpose(2, 1), scale_factor=upp, mode='nearest').transpose(2, 1)
+        tmp_over_one %= 1
+        tmp_over_one_idx = (tmp_over_one[:, 1:, :] - tmp_over_one[:, :-1, :]) < 0
+        cumsum_shift = torch.zeros_like(rad_values)
+        cumsum_shift[:, 1:, :] = tmp_over_one_idx * -1.0
+        rad_values = rad_values.double()
+        cumsum_shift = cumsum_shift.double()
+        sine_waves = torch.sin(torch.cumsum(rad_values + cumsum_shift, dim=1) * 2 * np.pi)
+        if is_half:
+            sine_waves = sine_waves.half()
+        else:
+            sine_waves = sine_waves.float()
+        sine_waves = sine_waves * self.sine_amp
+        uv = self._f02uv(f0)
+        uv = F.interpolate(uv.transpose(2, 1), scale_factor=upp, mode='nearest').transpose(2, 1)
+        noise_amp = uv * self.noise_std + (1 - uv) * self.sine_amp / 3
+        noise = noise_amp * torch.randn_like(sine_waves)
+        sine_waves = sine_waves * uv + noise
         return sine_waves, uv, noise
 
 
@@ -308,20 +206,10 @@ class SourceModuleHnNSF(torch.nn.Module):
         self.l_linear = torch.nn.Linear(harmonic_num + 1, 1)
         self.l_tanh = torch.nn.Tanh()
 
-    def forward(self, x):
-        """
-        Sine_source, noise_source = SourceModuleHnNSF(F0_sampled)
-        F0_sampled (batchsize, length, 1)
-        Sine_source (batchsize, length, 1)
-        noise_source (batchsize, length 1)
-        """
-        # source for harmonic branch
-        sine_wavs, uv, _ = self.l_sin_gen(x)
+    def forward(self, x, upp):
+        sine_wavs, uv, _ = self.l_sin_gen(x, upp)
         sine_merge = self.l_tanh(self.l_linear(sine_wavs))
-
-        # source for noise branch, in the same shape as uv
-        noise = torch.randn_like(uv) * self.sine_amp / 3
-        return sine_merge, noise, uv
+        return sine_merge
 
 
 class Generator(torch.nn.Module):
@@ -330,10 +218,10 @@ class Generator(torch.nn.Module):
         self.h = h
         self.num_kernels = len(h.resblock_kernel_sizes)
         self.num_upsamples = len(h.upsample_rates)
-        self.f0_upsamp = torch.nn.Upsample(scale_factor=np.prod(h.upsample_rates))
         self.m_source = SourceModuleHnNSF(
             sampling_rate=h.sampling_rate,
-            harmonic_num=8)
+            harmonic_num=8
+        )
         self.noise_convs = nn.ModuleList()
         self.conv_pre = weight_norm(Conv1d(h.num_mels, h.upsample_initial_channel, 7, 1, padding=3))
         resblock = ResBlock1 if h.resblock == '1' else ResBlock2
@@ -345,35 +233,30 @@ class Generator(torch.nn.Module):
                 ConvTranspose1d(h.upsample_initial_channel // (2 ** i), h.upsample_initial_channel // (2 ** (i + 1)),
                                 k, u, padding=(k - u) // 2)))
             if i + 1 < len(h.upsample_rates):  #
-                stride_f0 = np.prod(h.upsample_rates[i + 1:])
+                stride_f0 = int(np.prod(h.upsample_rates[i + 1:]))
                 self.noise_convs.append(Conv1d(
                     1, c_cur, kernel_size=stride_f0 * 2, stride=stride_f0, padding=stride_f0 // 2))
             else:
                 self.noise_convs.append(Conv1d(1, c_cur, kernel_size=1))
         self.resblocks = nn.ModuleList()
+        ch = h.upsample_initial_channel
         for i in range(len(self.ups)):
-            ch = h.upsample_initial_channel // (2 ** (i + 1))
+            ch //= 2
             for j, (k, d) in enumerate(zip(h.resblock_kernel_sizes, h.resblock_dilation_sizes)):
                 self.resblocks.append(resblock(h, ch, k, d))
 
         self.conv_post = weight_norm(Conv1d(ch, 1, 7, 1, padding=3))
         self.ups.apply(init_weights)
         self.conv_post.apply(init_weights)
+        self.upp = int(np.prod(h.upsample_rates))
 
     def forward(self, x, f0):
-        # print(1,x.shape,f0.shape,f0[:, None].shape)
-        f0 = self.f0_upsamp(f0[:, None]).transpose(1, 2)  # bs,n,t
-        # print(2,f0.shape)
-        har_source, noi_source, uv = self.m_source(f0)
-        har_source = har_source.transpose(1, 2)
+        har_source = self.m_source(f0, self.upp).transpose(1, 2)
         x = self.conv_pre(x)
-        # print(124,x.shape,har_source.shape)
         for i in range(self.num_upsamples):
             x = F.leaky_relu(x, LRELU_SLOPE)
-            # print(3,x.shape)
             x = self.ups[i](x)
             x_source = self.noise_convs[i](har_source)
-            # print(4,x_source.shape,har_source.shape,x.shape)
             x = x + x_source
             xs = None
             for j in range(self.num_kernels):
