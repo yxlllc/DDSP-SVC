@@ -10,6 +10,7 @@ from slicer import Slicer
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
 from ddsp.core import upsample
 from enhancer import Enhancer
+from tqdm import tqdm
 
 def parse_args(args=None, namespace=None):
     """Parse command-line arguments."""
@@ -83,6 +84,14 @@ def parse_args(args=None, namespace=None):
         default=-60,
         help="response threhold (dB) | default: -60",
     )
+    parser.add_argument(
+        "-eak",
+        "--enhancer_adaptive_key",
+        type=str,
+        required=False,
+        default=0,
+        help="adapt the enhancer to a higher vocal range (number of semitones) | default: 0",
+    )
     return parser.parse_args(args=args, namespace=namespace)
 
     
@@ -131,13 +140,15 @@ if __name__ == '__main__':
         audio = librosa.to_mono(audio)
     hop_size = args.data.block_size * sample_rate / args.data.sampling_rate
     
-    # extract f0 
+    # extract f0
+    print('Pitch extractor type: ' + cmd.pitch_extractor)
     pitch_extractor = F0_Extractor(
                         cmd.pitch_extractor, 
                         sample_rate, 
                         hop_size, 
                         float(cmd.f0_min), 
                         float(cmd.f0_max))
+    print('Extracting the pitch curve of the input audio...')
     f0 = pitch_extractor.extract(audio, uv_interp = True, device = device)
     f0 = torch.from_numpy(f0).float().to(device).unsqueeze(-1).unsqueeze(0)
    
@@ -145,6 +156,7 @@ if __name__ == '__main__':
     f0 = f0 * 2 ** (float(cmd.key) / 12)
     
     # extract volume 
+    print('Extracting the volume envelope of the input audio...')
     volume_extractor = Volume_Extractor(hop_size)
     volume = volume_extractor.extract(audio)
     mask = (volume > 10 ** (float(cmd.threhold) / 20)).astype('float')
@@ -164,14 +176,16 @@ if __name__ == '__main__':
                         
     # load enhancer
     if cmd.enhance == 'true':
+        print('Enhancer type: ' + args.enhancer.type)
         enhancer = Enhancer(args.enhancer.type, args.enhancer.ckpt, device=device)
-       
+        
     # forward and save the output
     result = np.zeros(0)
     current_length = 0
     segments = split(audio, sample_rate, hop_size)
+    print('Cut the input audio into ' + str(len(segments)) + ' slices')
     with torch.no_grad():
-        for segment in segments:
+        for segment in tqdm(segments):
             start_frame = segment[0]
             seg_input = torch.from_numpy(segment[1]).float().unsqueeze(0).to(device)
             seg_units = units_encoder.encode(seg_input, sample_rate, hop_size)
@@ -183,7 +197,12 @@ if __name__ == '__main__':
             seg_output *= mask[:, start_frame * args.data.block_size : (start_frame + seg_units.size(1)) * args.data.block_size]
             
             if cmd.enhance == 'true':
-                seg_output, output_sample_rate = enhancer.enhance(seg_output, args.data.sampling_rate, seg_f0, args.data.block_size)
+                seg_output, output_sample_rate = enhancer.enhance(
+                                                            seg_output, 
+                                                            args.data.sampling_rate, 
+                                                            seg_f0, 
+                                                            args.data.block_size, 
+                                                            adaptive_key = float(cmd.enhancer_adaptive_key))
             else:
                 output_sample_rate = args.data.sampling_rate
             

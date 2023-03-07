@@ -71,11 +71,12 @@ python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (
 ```
 ```bash
 # 使用预训练声码器增强输出结果
-# 正常音域范围内的将有更高的音质，但速度较慢
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -e true
+# 默认 enhancer_adaptive_key = 0 正常音域范围内将有更高的音质
+# 设置 enhancer_adaptive_key > 0 可将增强器适配于更高的音域
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -e true -eak <enhancer_adaptive_key (semitones)>
 ```
 ```bash
-# 关于 f0 提取器的其他选项，参见
+# 关于 f0 提取器和响应阈值的其他选项，参见
 python main.py -h
 ```
 

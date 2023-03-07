@@ -23,28 +23,41 @@ class Enhancer:
                 audio, # 1, T
                 sample_rate,
                 f0, # 1, n_frames, 1
-                hop_size):
-        # resample audio
-        if sample_rate == self.enhancer_sample_rate:
+                hop_size,
+                adaptive_key = 0):
+        adaptive_factor = 2 ** ( -adaptive_key / 12)
+        adaptive_sample_rate = 100 * int(np.round(self.enhancer_sample_rate / adaptive_factor / 100))
+        real_factor = sample_rate / adaptive_sample_rate
+        
+        # resample the ddsp output
+        if sample_rate == adaptive_sample_rate:
             audio_res = audio
         else:
-            key_str = str(sample_rate)
+            key_str = str(sample_rate) + str(adaptive_sample_rate)
             if key_str not in self.resample_kernel:
-                self.resample_kernel[key_str] = Resample(sample_rate, self.enhancer_sample_rate, lowpass_filter_width = 128).to(self.device)
+                self.resample_kernel[key_str] = Resample(sample_rate, adaptive_sample_rate, lowpass_filter_width = 128).to(self.device)
             audio_res = self.resample_kernel[key_str](audio)
         
         n_frames = int(audio_res.size(-1) // self.enhancer_hop_size + 1)
         
         # resample f0
         f0_np = f0.squeeze(0).squeeze(-1).cpu().numpy()
-        time_org = (hop_size / sample_rate) * np.arange(len(f0_np))
+        f0_np *= real_factor
+        time_org = (hop_size / sample_rate) * np.arange(len(f0_np)) / real_factor
         time_frame = (self.enhancer_hop_size / self.enhancer_sample_rate) * np.arange(n_frames)
         f0_res = np.interp(time_frame, time_org, f0_np, left=f0_np[0], right=f0_np[-1])
         f0_res = torch.from_numpy(f0_res).unsqueeze(0).float().to(self.device) # 1, n_frames
-        
+
         # enhance
         enhanced_audio, enhancer_sample_rate = self.enhancer(audio_res, f0_res)
         
+        # resample the enhanced output
+        if adaptive_factor != 0:
+            key_str = str(adaptive_sample_rate) + str(enhancer_sample_rate)
+            if key_str not in self.resample_kernel:
+                self.resample_kernel[key_str] = Resample(adaptive_sample_rate, enhancer_sample_rate, lowpass_filter_width = 128).to(self.device)
+            enhanced_audio =  self.resample_kernel[key_str](enhanced_audio)
+
         return enhanced_audio, enhancer_sample_rate
         
         

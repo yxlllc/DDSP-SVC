@@ -65,11 +65,12 @@ python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (
 ```
 ```bash
 # enhanced the output using the pretrained vocoder-based enhancer 
-# high audio quality in the normal vocal range, but slow
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -e true
+# high audio quality in the normal vocal range if enhancer_adaptive_key = 0 (default)
+# set enhancer_adaptive_key > 0 to adapt the enhancer to a higher vocal range
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -e true -eak <enhancer_adaptive_key (semitones)>
 ```
 ```bash
-# other options about the f0 extractor, see
+# other options about the f0 extractor and response threhold, see
 python main.py -h
 ```
 
