@@ -78,6 +78,7 @@ data/val/audio/ccc.wav
 data/val/audio/ddd.wav
 ...
 ```
+可在配置文件中修改 'n_spk' 选项启用多说话人模型
 ## 4. 训练
 ```bash
 # 以训练 combsub 模型为例 
