@@ -40,7 +40,8 @@ if __name__ == '__main__':
             n_harmonics=args.model.n_harmonics,
             n_mag_allpass=args.model.n_mag_allpass,
             n_mag_noise=args.model.n_mag_noise,
-            n_unit=args.data.encoder_out_channels)
+            n_unit=args.data.encoder_out_channels,
+            n_spk=args.model.n_spk)
  
     elif args.model.type == 'CombSub':
         model = CombSub(
@@ -49,7 +50,8 @@ if __name__ == '__main__':
             n_mag_allpass=args.model.n_mag_allpass,
             n_mag_harmonic=args.model.n_mag_harmonic,
             n_mag_noise=args.model.n_mag_noise,
-            n_unit=args.data.encoder_out_channels)
+            n_unit=args.data.encoder_out_channels,
+            n_spk=args.model.n_spk)
             
     else:
         raise ValueError(f" [x] Unknown Model: {args.model.type}")

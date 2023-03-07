@@ -17,6 +17,7 @@ model:
   n_harmonics: 128
   n_mag_allpass: 256
   n_mag_noise: 256
+  n_spk: 1 # max number of different speakers
 enhancer:
     type: 'nsf-hifigan'
     ckpt: 'pretrain/nsf_hifigan/model'

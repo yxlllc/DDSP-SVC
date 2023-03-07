@@ -47,6 +47,7 @@ def preprocess(path, f0_extractor, volume_extractor, units_encoder, sample_rate,
         path_unitsfile = os.path.join(path_unitsdir, binfile)
         path_f0file = os.path.join(path_f0dir, binfile)
         path_volumefile = os.path.join(path_volumedir, binfile)
+        path_skipfile = os.path.join(path_skipdir, file)
         
         # load audio
         audio, _ = librosa.load(path_srcfile, sr=sample_rate)
@@ -70,18 +71,18 @@ def preprocess(path, f0_extractor, volume_extractor, units_encoder, sample_rate,
             # interpolate the unvoiced f0
             f0[uv] = np.interp(np.where(uv)[0], np.where(~uv)[0], f0[~uv])
 
-            # save npy
-            os.makedirs(path_unitsdir, exist_ok=True)
+            # save npy     
+            os.makedirs(os.path.dirname(path_unitsfile), exist_ok=True)
             np.save(path_unitsfile, units)
-            os.makedirs(path_f0dir, exist_ok=True)
+            os.makedirs(os.path.dirname(path_f0file), exist_ok=True)
             np.save(path_f0file, f0)
-            os.makedirs(path_volumedir, exist_ok=True)
+            os.makedirs(os.path.dirname(path_volumefile), exist_ok=True)
             np.save(path_volumefile, volume)
         else:
             print('\n[Error] F0 extraction failed: ' + path_srcfile)
-            os.makedirs(path_skipdir, exist_ok=True)
-            shutil.move(path_srcfile, path_skipdir)
-            print('This file has been moved to ' + os.path.join(path_skipdir, file))
+            os.makedirs(os.path.dirname(path_skipfile), exist_ok=True)
+            shutil.move(path_srcfile, os.path.dirname(path_skipfile))
+            print('This file has been moved to ' + path_skipfile)
     print('Preprocess the audio clips in :', path_srcdir)
     
     # single process

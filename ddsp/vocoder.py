@@ -183,7 +183,8 @@ def load_model(
             n_harmonics=args.model.n_harmonics,
             n_mag_allpass=args.model.n_mag_allpass,
             n_mag_noise=args.model.n_mag_noise,
-            n_unit=args.data.encoder_out_channels)
+            n_unit=args.data.encoder_out_channels,
+            n_spk=args.model.n_spk)
     
     elif args.model.type == 'CombSub':
         model = CombSub(
@@ -192,7 +193,8 @@ def load_model(
             n_mag_allpass=args.model.n_mag_allpass,
             n_mag_harmonic=args.model.n_mag_harmonic,
             n_mag_noise=args.model.n_mag_noise,
-            n_unit=args.data.encoder_out_channels)
+            n_unit=args.data.encoder_out_channels,
+            n_spk=args.model.n_spk)
             
     else:
         raise ValueError(f" [x] Unknown Model: {args.model.type}")
@@ -212,7 +214,8 @@ class Sins(torch.nn.Module):
             n_harmonics,
             n_mag_allpass,
             n_mag_noise,
-            n_unit=256):
+            n_unit=256,
+            n_spk=1):
         super().__init__()
 
         print(' [DDSP Model] Sinusoids Additive Synthesiser')
@@ -226,13 +229,14 @@ class Sins(torch.nn.Module):
             'group_delay': n_mag_allpass,
             'noise_magnitude': n_mag_noise,
         }
-        self.unit2ctrl = Unit2Control(n_unit, split_map)
+        self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map)
 
-    def forward(self, units_frames, f0_frames, volume_frames, initial_phase=None, max_upsample_dim=32):
+    def forward(self, units_frames, f0_frames, volume_frames, spk_id, initial_phase=None, max_upsample_dim=32):
         '''
             units_frames: B x n_frames x n_unit
             f0_frames: B x n_frames x 1
-            volume_frames: B x n_frames x 1 
+            volume_frames: B x n_frames x 1
+            spk_id: B x 1
         '''
         # exciter phase
         f0 = upsample(f0_frames, self.block_size)
@@ -247,7 +251,7 @@ class Sins(torch.nn.Module):
         phase_frames = phase[:, ::self.block_size, :]
         
         # parameter prediction
-        ctrls = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames)
+        ctrls = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id)
         
         amplitudes_frames = torch.exp(ctrls['amplitudes'])/ 128
         group_delay = np.pi * torch.tanh(ctrls['group_delay'])
@@ -289,7 +293,8 @@ class CombSub(torch.nn.Module):
             n_mag_allpass,
             n_mag_harmonic,
             n_mag_noise,
-            n_unit=256):
+            n_unit=256,
+            n_spk=1):
         super().__init__()
 
         print(' [DDSP Model] Combtooth Subtractive Synthesiser')
@@ -302,13 +307,14 @@ class CombSub(torch.nn.Module):
             'harmonic_magnitude': n_mag_harmonic, 
             'noise_magnitude': n_mag_noise
         }
-        self.unit2ctrl = Unit2Control(n_unit, split_map)
+        self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map)
 
-    def forward(self, units_frames, f0_frames, volume_frames, initial_phase=None, **kwargs):
+    def forward(self, units_frames, f0_frames, volume_frames, spk_id, initial_phase=None, **kwargs):
         '''
             units_frames: B x n_frames x n_unit
             f0_frames: B x n_frames x 1
             volume_frames: B x n_frames x 1 
+            spk_id: B x 1
         '''
         # exciter phase
         f0 = upsample(f0_frames, self.block_size)
@@ -322,7 +328,7 @@ class CombSub(torch.nn.Module):
         phase_frames = 2 * np.pi * x[:, ::self.block_size, :]
         
         # parameter prediction
-        ctrls = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames)
+        ctrls = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id)
         
         group_delay = np.pi * torch.tanh(ctrls['group_delay'])
         src_param = torch.exp(ctrls['harmonic_magnitude'])

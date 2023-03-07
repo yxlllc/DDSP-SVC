@@ -37,6 +37,14 @@ def parse_args(args=None, namespace=None):
         help="path to the output audio file",
     )
     parser.add_argument(
+        "-id",
+        "--spk_id",
+        type=str,
+        required=False,
+        default=1,
+        help="speaker id (for multt-speaker model) | default: 1",
+    )
+    parser.add_argument(
         "-k",
         "--key",
         type=str,
@@ -125,8 +133,8 @@ def cross_fade(a: np.ndarray, b: np.ndarray, idx: int):
 
 
 if __name__ == '__main__':
-    #device = 'cpu' 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'cpu' 
+    #device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     # parse commands
     cmd = parse_args()
@@ -178,7 +186,10 @@ if __name__ == '__main__':
     if cmd.enhance == 'true':
         print('Enhancer type: ' + args.enhancer.type)
         enhancer = Enhancer(args.enhancer.type, args.enhancer.ckpt, device=device)
-        
+    
+    # speaker id
+    print('Speaker ID: '+ str(int(cmd.spk_id)))    
+    spk_id = torch.LongTensor(np.array([[int(cmd.spk_id)]])).to(device)
     # forward and save the output
     result = np.zeros(0)
     current_length = 0
@@ -193,7 +204,7 @@ if __name__ == '__main__':
             seg_f0 = f0[:, start_frame : start_frame + seg_units.size(1), :]
             seg_volume = volume[:, start_frame : start_frame + seg_units.size(1), :]
             
-            seg_output, _, (s_h, s_n) = model(seg_units, seg_f0, seg_volume)
+            seg_output, _, (s_h, s_n) = model(seg_units, seg_f0, seg_volume, spk_id)
             seg_output *= mask[:, start_frame * args.data.block_size : (start_frame + seg_units.size(1)) * args.data.block_size]
             
             if cmd.enhance == 'true':

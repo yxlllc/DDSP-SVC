@@ -125,6 +125,9 @@ class AudioDataset(Dataset):
             volume = np.load(path_volume)
             volume = torch.from_numpy(volume).float().unsqueeze(-1).to(device)
             
+            spk_id = int(os.path.dirname(name)) if str.isdigit(os.path.dirname(name)) else 0
+            spk_id = torch.LongTensor(np.array([spk_id])).to(device)
+
             if load_all_data:
                 audio, sr = librosa.load(path_audio, sr=self.sample_rate)
                 if len(audio.shape) > 1:
@@ -140,13 +143,15 @@ class AudioDataset(Dataset):
                         'audio': audio,
                         'units': units,
                         'f0': f0,
-                        'volume': volume
+                        'volume': volume,
+                        'spk_id': spk_id
                         }
             else:
                 self.data_buffer[name] = {
                         'duration': duration,
                         'f0': f0,
-                        'volume': volume
+                        'volume': volume,
+                        'spk_id': spk_id
                         }
            
 
@@ -156,7 +161,7 @@ class AudioDataset(Dataset):
         # check duration. if too short, then skip
         if data_buffer['duration'] < (self.waveform_sec + 0.1):
             return self.__getitem__( (file_idx + 1) % len(self.paths))
-        
+            
         # get item
         return self.get_data(name, data_buffer)
 
@@ -202,8 +207,11 @@ class AudioDataset(Dataset):
         # load volume
         volume = data_buffer.get('volume')
         volume_frames = volume[start_frame : start_frame + units_frame_len]
-                
-        return dict(audio=audio, f0=f0_frames, volume=volume_frames, units=units, name=name)
+        
+        # load spk_id
+        spk_id = data_buffer.get('spk_id')
+        
+        return dict(audio=audio, f0=f0_frames, volume=volume_frames, units=units, spk_id=spk_id, name=name)
 
     def __len__(self):
         return len(self.paths)

@@ -25,12 +25,17 @@ class Unit2Control(nn.Module):
     def __init__(
             self,
             input_channel,
+            n_spk,
             output_splits):
         super().__init__()
         self.output_splits = output_splits
         self.f0_embed = nn.Linear(1, 256)
         self.phase_embed = nn.Linear(1, 256)
         self.volume_embed = nn.Linear(1, 256)
+        self.n_spk = n_spk
+        if n_spk is not None and n_spk > 1:
+            self.spk_embed = nn.Embedding(n_spk, 256)
+            
         # conv in stack
         self.stack = nn.Sequential(
                 nn.Conv1d(input_channel, 256, 3, 1, 1),
@@ -54,7 +59,7 @@ class Unit2Control(nn.Module):
         self.dense_out = weight_norm(
             nn.Linear(256, self.n_out))
 
-    def forward(self, units, f0, phase, volume):
+    def forward(self, units, f0, phase, volume, spk_id):
         
         '''
         input: 
@@ -65,6 +70,8 @@ class Unit2Control(nn.Module):
 
         x = self.stack(units.transpose(1,2)).transpose(1,2)
         x = x + self.f0_embed((1+ f0 / 700).log()) + self.phase_embed(phase / np.pi) + self.volume_embed(volume)
+        if self.n_spk is not None and self.n_spk > 1:
+            x = x + self.spk_embed(spk_id - 1)
         x = self.decoder(x)
         x = self.norm(x)
         e = self.dense_out(x)

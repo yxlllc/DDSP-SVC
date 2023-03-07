@@ -29,12 +29,12 @@ def test(args, model, loss_func, loader_test, saver):
             # unpack data
             for k in data.keys():
                 if k != 'name':
-                    data[k] = data[k].to(args.device).float()
+                    data[k] = data[k].to(args.device)
             print('>>', data['name'][0])
 
             # forward
             st_time = time.time()
-            signal, _, (s_h, s_n) = model(data['units'], data['f0'], data['volume'])
+            signal, _, (s_h, s_n) = model(data['units'], data['f0'], data['volume'], data['spk_id'])
             ed_time = time.time()
 
             # crop
@@ -86,12 +86,13 @@ def train(args, initial_global_step, model, optimizer, loss_func, loader_train, 
             optimizer.zero_grad()
 
             # unpack data
+            
             for k in data.keys():
                 if k != 'name':
-                    data[k] = data[k].to(args.device).float()
+                    data[k] = data[k].to(args.device)
             
             # forward
-            signal, _, (s_h, s_n) = model(data['units'], data['f0'], data['volume'])
+            signal, _, (s_h, s_n) = model(data['units'], data['f0'], data['volume'], data['spk_id'])
 
             # loss
             loss = loss_func(signal, data['audio'])

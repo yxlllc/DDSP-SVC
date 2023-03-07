@@ -44,12 +44,45 @@ python preprocess.py -c configs/sins.yaml
 
 注 3：验证集的音频切片总数建议为 10 个左右，不要放太多，不然验证过程会很慢。
 
+更新：现在支持多说话人训练了，如果您要训练**多说话人**模型，目录结构如下所示：
+```bash
+# 训练集
+# 第1个说话人
+data/train/audio/1/aaa.wav
+data/train/audio/1/bbb.wav
+...
+# 第2个说话人
+data/train/audio/2/ccc.wav
+data/train/audio/2/ddd.wav
+...
+
+# 验证集
+# 第1个说话人
+data/val/audio/1/eee.wav
+data/val/audio/1/fff.wav
+...
+# 第2个说话人
+data/val/audio/2/ggg.wav
+data/val/audio/2/hhh.wav
+...
+```
+之前**单说话人**模型的目录结构仍然支持，即：
+
+```bash
+# 训练集
+data/train/audio/aaa.wav
+data/train/audio/bbb.wav
+...
+# 验证集
+data/val/audio/ccc.wav
+data/val/audio/ddd.wav
+...
+```
 ## 4. 训练
 ```bash
 # 以训练 combsub 模型为例 
 python train.py -c configs/combsub.yaml
 ```
-
 训练其他模型方法类似。
 
 您可以随时中止训练，然后运行相同的命令来继续训练。
@@ -67,13 +100,13 @@ tensorboard --logdir=exp
 ```bash
 # 以下是 ddsp-svc 变声器的原始输出
 # 速度快，但音质相对较低
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)>
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id>
 ```
 ```bash
 # 使用预训练声码器增强输出结果
 # 默认 enhancer_adaptive_key = 0 正常音域范围内将有更高的音质
 # 设置 enhancer_adaptive_key > 0 可将增强器适配于更高的音域
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -e true -eak <enhancer_adaptive_key (semitones)>
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -e true -eak <enhancer_adaptive_key (semitones)>
 ```
 ```bash
 # 关于 f0 提取器和响应阈值的其他选项，参见

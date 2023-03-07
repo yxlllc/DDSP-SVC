@@ -17,7 +17,7 @@ NOTE : I only test the code using python 3.8 (windows) + pytorch 1.9.1 + torchau
 ## 3. Preprocessing
 
 Put all the training dataset (.wav format audio clips) in the below directory:
-`data/train/audio`.
+`data/train/audio`. 
 Put all the validation dataset (.wav format audio clips) in the below directory:
 `data/val/audio`.
 Then run
@@ -38,6 +38,40 @@ NOTE 2: The total number of the audio clips for training dataset is recommended 
 
 NOTE 3: The total number of the audio clips for validation dataset is recommended to be about 10, please don't put too many or it will be very slow to do the validation.
 
+UPDATE: Multi-speaker training is supported now,  if you want to train a **multi-speaker** model, the directory structure is like below:
+```bash
+# training dataset
+# the 1st speaker
+data/train/audio/1/aaa.wav
+data/train/audio/1/bbb.wav
+...
+# the 2nd speaker
+data/train/audio/2/ccc.wav
+data/train/audio/2/ddd.wav
+...
+
+# validation dataset
+# the 1st speaker
+data/val/audio/1/eee.wav
+data/val/audio/1/fff.wav
+...
+# the 2nd speaker
+data/val/audio/2/ggg.wav
+data/val/audio/2/hhh.wav
+...
+```
+The directory structure of the **singer speaker** model is still supported, which is like below:
+```bash
+# training dataset
+data/train/audio/aaa.wav
+data/train/audio/bbb.wav
+...
+# validation dataset
+data/val/audio/ccc.wav
+data/val/audio/ddd.wav
+...
+```
+The 'n_spk' option in configuration file controls whether it is a multi-speaker model.
 ## 4. Training
 ```bash
 # train a combsub model as an example
@@ -56,18 +90,18 @@ tensorboard --logdir=exp
 ```
 Test audio samples will be visible in TensorBoard after the first validation.
 
-Note: The test audio samples in Tensorboard are the original outputs of your DDSP-SVC model that is not enhanced by an enhancer. If you want to test the synthetic effect after using the enhancer  (which may have higher quality) , please use the method described in the following chapter.
+NOTE: The test audio samples in Tensorboard are the original outputs of your DDSP-SVC model that is not enhanced by an enhancer. If you want to test the synthetic effect after using the enhancer  (which may have higher quality) , please use the method described in the following chapter.
 ## 6. Testing
 ```bash
 # origin output of ddsp-svc
 # fast, but relatively low audio quality
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)>
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id>
 ```
 ```bash
 # enhanced the output using the pretrained vocoder-based enhancer 
 # high audio quality in the normal vocal range if enhancer_adaptive_key = 0 (default)
 # set enhancer_adaptive_key > 0 to adapt the enhancer to a higher vocal range
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -e true -eak <enhancer_adaptive_key (semitones)>
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -e true -eak <enhancer_adaptive_key (semitones)>
 ```
 ```bash
 # other options about the f0 extractor and response threhold, see
