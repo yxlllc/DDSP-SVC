@@ -38,7 +38,7 @@ NOTE 2: The total number of the audio clips for training dataset is recommended 
 
 NOTE 3: The total number of the audio clips for validation dataset is recommended to be about 10, please don't put too many or it will be very slow to do the validation.
 
-UPDATE: Multi-speaker training is supported now,  if you want to train a **multi-speaker** model, the directory structure is like below:
+UPDATE: Multi-speaker training is supported now. The 'n_spk' parameter in configuration file controls whether it is a multi-speaker model.  If you want to train a **multi-speaker** model, audio folders need to be named with **positive integers not greater than 'n_spk'** to represent speaker ids, the directory structure is like below:
 ```bash
 # training dataset
 # the 1st speaker
@@ -60,7 +60,7 @@ data/val/audio/2/ggg.wav
 data/val/audio/2/hhh.wav
 ...
 ```
-The directory structure of the **single speaker** model is still supported, which is like below:
+If 'n_spk'  = 1, The directory structure of the **single speaker** model is still supported, which is like below:
 ```bash
 # training dataset
 data/train/audio/aaa.wav
@@ -71,7 +71,7 @@ data/val/audio/ccc.wav
 data/val/audio/ddd.wav
 ...
 ```
-The 'n_spk' option in configuration file controls whether it is a multi-speaker model.
+
 ## 4. Training
 ```bash
 # train a combsub model as an example
@@ -107,4 +107,8 @@ python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (
 # other options about the f0 extractor and response threhold, see
 python main.py -h
 ```
-
+UPDATE：Mix-speaker is supported now. You can use "-mix" option to design your own vocal timbre, below is an example:
+```bash
+# Mix the timbre of 1st and 2nd speaker in a 0.5 to 0.5 ratio
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -e true -eak 0
+```

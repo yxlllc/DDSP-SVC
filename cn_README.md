@@ -44,7 +44,7 @@ python preprocess.py -c configs/sins.yaml
 
 注 3：验证集的音频切片总数建议为 10 个左右，不要放太多，不然验证过程会很慢。
 
-更新：现在支持多说话人训练了，如果您要训练**多说话人**模型，目录结构如下所示：
+更新：现在支持多说话人训练了，配置文件中的 ‘n_spk’ 参数将控制是否训练多说话人模型。如果您要训练**多说话人**模型，为了对说话人进行编号，所有音频文件夹的名称必须是**不大于 ‘n_spk’ 的正整数**，目录结构如下所示：
 ```bash
 # 训练集
 # 第1个说话人
@@ -66,7 +66,7 @@ data/val/audio/2/ggg.wav
 data/val/audio/2/hhh.wav
 ...
 ```
-之前**单说话人**模型的目录结构仍然支持，即：
+当 'n_spk' =1 时，之前**单说话人**模型的目录结构仍然支持，即：
 
 ```bash
 # 训练集
@@ -113,4 +113,8 @@ python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (
 # 关于 f0 提取器和响应阈值的其他选项，参见
 python main.py -h
 ```
-
+更新： 现在支持混合说话人（捏音色）了。您可以使用 “-mix” 选项来设计属于您自己的音色，下面是个例子：
+```bash
+# 将1号说话人和2号说话人的音色按照0.5:0.5的比例混合
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -e true -eak 0
+```

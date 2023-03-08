@@ -6,6 +6,7 @@ import numpy as np
 import soundfile as sf
 import pyworld as pw
 import parselmouth
+from ast import literal_eval
 from slicer import Slicer
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
 from ddsp.core import upsample
@@ -42,7 +43,15 @@ def parse_args(args=None, namespace=None):
         type=str,
         required=False,
         default=1,
-        help="speaker id (for multt-speaker model) | default: 1",
+        help="speaker id (for multi-speaker model) | default: 1",
+    )
+    parser.add_argument(
+        "-mix",
+        "--spk_mix_dict",
+        type=str,
+        required=False,
+        default="None",
+        help="mix-speaker dictionary (for multi-speaker model) | default: None",
     )
     parser.add_argument(
         "-k",
@@ -187,8 +196,12 @@ if __name__ == '__main__':
         print('Enhancer type: ' + args.enhancer.type)
         enhancer = Enhancer(args.enhancer.type, args.enhancer.ckpt, device=device)
     
-    # speaker id
-    print('Speaker ID: '+ str(int(cmd.spk_id)))    
+    # speaker id or mix-speaker dictionary
+    spk_mix_dict = literal_eval(cmd.spk_mix_dict)
+    if spk_mix_dict is not None:
+        print('Mix-speaker mode')
+    else:
+        print('Speaker ID: '+ str(int(cmd.spk_id)))        
     spk_id = torch.LongTensor(np.array([[int(cmd.spk_id)]])).to(device)
     # forward and save the output
     result = np.zeros(0)
@@ -204,7 +217,7 @@ if __name__ == '__main__':
             seg_f0 = f0[:, start_frame : start_frame + seg_units.size(1), :]
             seg_volume = volume[:, start_frame : start_frame + seg_units.size(1), :]
             
-            seg_output, _, (s_h, s_n) = model(seg_units, seg_f0, seg_volume, spk_id)
+            seg_output, _, (s_h, s_n) = model(seg_units, seg_f0, seg_volume, spk_id = spk_id, spk_mix_dict = spk_mix_dict)
             seg_output *= mask[:, start_frame * args.data.block_size : (start_frame + seg_units.size(1)) * args.data.block_size]
             
             if cmd.enhance == 'true':

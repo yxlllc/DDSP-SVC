@@ -231,7 +231,7 @@ class Sins(torch.nn.Module):
         }
         self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map)
 
-    def forward(self, units_frames, f0_frames, volume_frames, spk_id, initial_phase=None, max_upsample_dim=32):
+    def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, initial_phase=None, max_upsample_dim=32):
         '''
             units_frames: B x n_frames x n_unit
             f0_frames: B x n_frames x 1
@@ -251,7 +251,7 @@ class Sins(torch.nn.Module):
         phase_frames = phase[:, ::self.block_size, :]
         
         # parameter prediction
-        ctrls = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id)
+        ctrls = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict)
         
         amplitudes_frames = torch.exp(ctrls['amplitudes'])/ 128
         group_delay = np.pi * torch.tanh(ctrls['group_delay'])
@@ -309,7 +309,7 @@ class CombSub(torch.nn.Module):
         }
         self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map)
 
-    def forward(self, units_frames, f0_frames, volume_frames, spk_id, initial_phase=None, **kwargs):
+    def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, initial_phase=None, **kwargs):
         '''
             units_frames: B x n_frames x n_unit
             f0_frames: B x n_frames x 1
@@ -328,7 +328,7 @@ class CombSub(torch.nn.Module):
         phase_frames = 2 * np.pi * x[:, ::self.block_size, :]
         
         # parameter prediction
-        ctrls = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id)
+        ctrls = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict)
         
         group_delay = np.pi * torch.tanh(ctrls['group_delay'])
         src_param = torch.exp(ctrls['harmonic_magnitude'])

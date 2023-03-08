@@ -59,7 +59,7 @@ class Unit2Control(nn.Module):
         self.dense_out = weight_norm(
             nn.Linear(256, self.n_out))
 
-    def forward(self, units, f0, phase, volume, spk_id):
+    def forward(self, units, f0, phase, volume, spk_id = None, spk_mix_dict = None):
         
         '''
         input: 
@@ -71,7 +71,12 @@ class Unit2Control(nn.Module):
         x = self.stack(units.transpose(1,2)).transpose(1,2)
         x = x + self.f0_embed((1+ f0 / 700).log()) + self.phase_embed(phase / np.pi) + self.volume_embed(volume)
         if self.n_spk is not None and self.n_spk > 1:
-            x = x + self.spk_embed(spk_id - 1)
+            if spk_mix_dict is not None:
+                for k, v in spk_mix_dict.items():
+                    spk_id_torch = torch.LongTensor(np.array([[k]])).to(units.device)
+                    x = x + v * self.spk_embed(spk_id_torch - 1)
+            else:
+                x = x + self.spk_embed(spk_id - 1)
         x = self.decoder(x)
         x = self.norm(x)
         e = self.dense_out(x)

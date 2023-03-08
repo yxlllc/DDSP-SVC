@@ -47,7 +47,7 @@ def voice_change_model():
 
 class SvcDDSP:
     def __init__(self, model_path, vocoder_based_enhancer, input_pitch_extractor,
-                 f0_min, f0_max, threhold, spk_id, enable_spk_id_cover):
+                 f0_min, f0_max, threhold, spk_id, spk_mix_dict, enable_spk_id_cover):
         self.model_path = model_path
         self.vocoder_based_enhancer = vocoder_based_enhancer
         self.input_pitch_extractor = input_pitch_extractor
@@ -56,6 +56,7 @@ class SvcDDSP:
         self.threhold = threhold
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.spk_id = spk_id
+        self.spk_mix_dict = spk_mix_dict
         self.enable_spk_id_cover = enable_spk_id_cover
         
         # load ddsp model
@@ -106,7 +107,7 @@ class SvcDDSP:
         audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(self.device)
         units = self.units_encoder.encode(audio_t, sample_rate, hop_size)
         
-        # spk_id
+        # spk_id or spk_mix_dict
         if self.enable_spk_id_cover:
             spk_id = self.spk_id
         else:
@@ -115,7 +116,7 @@ class SvcDDSP:
         
         # forward and return the output
         with torch.no_grad():
-            output, _, (s_h, s_n) = self.model(units, f0, volume, spk_id)
+            output, _, (s_h, s_n) = self.model(units, f0, volume, spk_id = spk_id, spk_mix_dict = self.spk_mix_dict)
             output *= mask
             if self.vocoder_based_enhancer:
                 output, output_sample_rate = self.enhancer.enhance(output, self.args.data.sampling_rate, f0, self.args.data.block_size)
@@ -144,9 +145,13 @@ if __name__ == "__main__":
     # 默认说话人。以及是否优先使用默认说话人覆盖vst传入的参数。
     spk_id = 1
     enable_spk_id_cover = True
+    
+    # 混合说话人字典（捏音色功能）
+    # 设置为非 None 字典会覆盖 spk_id
+    spk_mix_dict = None # {1:0.5, 2:0.5} 表示1号说话人和2号说话人的音色按照0.5:0.5的比例混合
 
     svc_model = SvcDDSP(checkpoint_path, use_vocoder_based_enhancer, select_pitch_extractor,
-                        limit_f0_min, limit_f0_max, threhold, spk_id, enable_spk_id_cover)
+                        limit_f0_min, limit_f0_max, threhold, spk_id, spk_mix_dict, enable_spk_id_cover)
 
     # 此处与vst插件对应，端口必须接上。
     app.run(port=6844, host="0.0.0.0", debug=False, threaded=False)
