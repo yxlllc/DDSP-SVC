@@ -133,8 +133,8 @@ def cross_fade(a: np.ndarray, b: np.ndarray, idx: int):
 
 
 if __name__ == '__main__':
-    device = 'cpu' 
-    #device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    #device = 'cpu' 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     # parse commands
     cmd = parse_args()

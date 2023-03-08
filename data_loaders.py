@@ -56,6 +56,7 @@ def get_data_loaders(args, whole_audio=False):
         sample_rate=args.data.sampling_rate,
         load_all_data=args.train.cache_all_data,
         whole_audio=whole_audio,
+        n_spk=args.model.n_spk,
         device=args.train.cache_device)
     loader_train = torch.utils.data.DataLoader(
         data_train ,
@@ -71,7 +72,8 @@ def get_data_loaders(args, whole_audio=False):
         hop_size=args.data.block_size,
         sample_rate=args.data.sampling_rate,
         load_all_data=args.train.cache_all_data,
-        whole_audio=True)
+        whole_audio=True,
+        n_spk=args.model.n_spk)
     loader_valid = torch.utils.data.DataLoader(
         data_valid,
         batch_size=1,
@@ -92,6 +94,7 @@ class AudioDataset(Dataset):
         sample_rate,
         load_all_data=True,
         whole_audio=False,
+        n_spk=1,
         device = 'cpu'
     ):
         super().__init__()
@@ -125,7 +128,12 @@ class AudioDataset(Dataset):
             volume = np.load(path_volume)
             volume = torch.from_numpy(volume).float().unsqueeze(-1).to(device)
             
-            spk_id = int(os.path.dirname(name)) if str.isdigit(os.path.dirname(name)) else 0
+            if n_spk is not None and n_spk > 1:
+                spk_id = int(os.path.dirname(name)) if str.isdigit(os.path.dirname(name)) else 0
+                if spk_id < 1 or spk_id > n_spk:
+                    raise ValueError(' [x] Muiti-speaker traing error : spk_id must be a positive integer from 1 to n_spk ')
+            else:
+                spk_id = 1
             spk_id = torch.LongTensor(np.array([spk_id])).to(device)
 
             if load_all_data:
