@@ -12,7 +12,7 @@ Compared with the more famous [Diff-SVC](https://github.com/prophesier/diff-svc)
 
 Although the original synthesis quality of DDSP is not ideal (the original output can be heard in tensorboard while training), after using the pre-trained vocoder-based enhancer, the sound quality can reach a level close to SO-VITS-SVC.
 
-If the quality of the training data is very high, probably still Diff-SVC will have the highest sound quality.
+If the quality of the training data is very high, probably still Diff-SVC will have the highest sound quality. The demo outputs are in the `samples` folder,  and the related model checkpoint can be downloaded from the release page.
 
 ## 1. Installing the dependencies
 We recommend first installing PyTorch from the [**official website**](https://pytorch.org/), then run:
