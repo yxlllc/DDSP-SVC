@@ -3,7 +3,16 @@ Language: [English](./README.md) ** 简体中文 **
 <div align="center">
 <img src="https://storage.googleapis.com/ddsp/github_images/ddsp_logo.png" width="200px" alt="logo"></img>
 </div>
-基于 DDSP 的端到端歌声转换系统
+基于 DDSP（可微分数字信号处理） 的端到端歌声转换系统
+
+## 0.简介
+DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个人电脑上普及的自由AI变声器软件。
+
+相比于比较著名的 [Diff-SVC](https://github.com/prophesier/diff-svc) 和 [SO-VITS-SVC](https://github.com/innnky/so-vits-svc), 它训练和合成对电脑硬件的要求要低的多，并且训练时长有数量级的缩短。
+
+虽然 DDSP 的原始合成质量不是很理想（训练时在 tensorboard 中可以听到原始输出），但在使用基于预训练声码器的增强器增强音质后，可以达到接近 SOVITS-SVC 的合成质量。
+
+如果训练数据的质量非常高，可能仍然 Diff-SVC 将拥有最高的合成质量。
 
 ## 1. 安装依赖
 我们推荐从 [**PyTorch 官方网站 **](https://pytorch.org/) 下载 PyTorch.
@@ -99,8 +108,8 @@ tensorboard --logdir=exp
 注：TensorBoard 中的测试音频是 DDSP-SVC 模型的原始输出，并未通过增强器增强。 如果想测试模型使用增强器的合成效果（可能具有更高的合成质量），请使用下一章中描述的方法。
 ## 6. 测试
 ```bash
-# 以下是 ddsp-svc 变声器的原始输出
-# 速度快，但音质相对较低
+# 以下是 ddsp-svc 变声器的原始输出 
+# 速度快，但音质相对较低（像您在tensorboard里听到的那样）
 python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id>
 ```
 ```bash

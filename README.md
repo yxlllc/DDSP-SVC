@@ -3,7 +3,16 @@ Language: **English** [简体中文](./cn_README.md)
 <div align="center">
 <img src="https://storage.googleapis.com/ddsp/github_images/ddsp_logo.png" width="200px" alt="logo"></img>
 </div>
-End-to-end singing voice conversion system based on DDSP.
+End-to-end singing voice conversion system based on DDSP （Differentiable Digital Signal Processing）.
+
+## 0. Introduction
+DDSP-SVC is a new open source singing voice conversion project dedicated to the development of free AI voice changer software that can be popularized on personal computers.
+
+Compared with the more famous [Diff-SVC](https://github.com/prophesier/diff-svc) and [SO-VITS-SVC](https://github.com/innnky/so-vits-svc),  its training and synthesis have much lower requirements for computer hardware, and the training time can be shortened by orders of magnitude.
+
+Although the original synthesis quality of DDSP is not ideal (the original output can be heard in tensorboard while training), after using the pre-trained vocoder-based enhancer, the sound quality can reach a level close to SO-VITS-SVC.
+
+If the quality of the training data is very high, probably still Diff-SVC will have the highest sound quality.
 
 ## 1. Installing the dependencies
 We recommend first installing PyTorch from the [**official website**](https://pytorch.org/), then run:
@@ -94,7 +103,7 @@ NOTE: The test audio samples in Tensorboard are the original outputs of your DDS
 ## 6. Testing
 ```bash
 # origin output of ddsp-svc
-# fast, but relatively low audio quality
+# fast, but relatively low audio quality (like you hear in tensorboard)
 python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id>
 ```
 ```bash
@@ -111,4 +120,10 @@ UPDATE：Mix-speaker is supported now. You can use "-mix" option to design your 
 ```bash
 # Mix the timbre of 1st and 2nd speaker in a 0.5 to 0.5 ratio
 python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -e true -eak 0
+
 ```
+## 7. Acknowledgement
+* [ddsp](https://github.com/magenta/ddsp)
+* [pc-ddsp](https://github.com/yxlllc/pc-ddsp)
+* [soft-vc](https://github.com/bshall/soft-vc)
+* [DiffSinger (OpenVPI version)](https://github.com/openvpi/DiffSinger)
