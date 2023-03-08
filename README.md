@@ -60,7 +60,7 @@ data/val/audio/2/ggg.wav
 data/val/audio/2/hhh.wav
 ...
 ```
-The directory structure of the **singer speaker** model is still supported, which is like below:
+The directory structure of the **single speaker** model is still supported, which is like below:
 ```bash
 # training dataset
 data/train/audio/aaa.wav
