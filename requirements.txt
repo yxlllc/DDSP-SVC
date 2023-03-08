@@ -1,4 +1,6 @@
 einops
+flask
+flask_cors
 gin
 gin_config
 librosa
