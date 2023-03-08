@@ -3,7 +3,7 @@ Language: [English](./README.md) ** 简体中文 **
 <div align="center">
 <img src="https://storage.googleapis.com/ddsp/github_images/ddsp_logo.png" width="200px" alt="logo"></img>
 </div>
-基于 DDSP（可微分数字信号处理） 的端到端歌声转换系统
+基于 DDSP（可微分数字信号处理）的端到端歌声转换系统
 
 ## 0.简介
 DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个人电脑上普及的自由AI变声器软件。
