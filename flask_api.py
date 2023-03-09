@@ -85,6 +85,12 @@ class SvcDDSP:
             audio = librosa.to_mono(audio)
         hop_size = self.args.data.block_size * sample_rate / self.args.data.sampling_rate
         
+        # safe front silence
+        if safe_prefix_pad_length > 0.03:
+            silence_front = safe_prefix_pad_length - 0.03
+        else:
+            slience_front = 0
+            
         # extract f0
         pitch_extractor = F0_Extractor(
             self.input_pitch_extractor,
@@ -92,7 +98,7 @@ class SvcDDSP:
             hop_size,
             float(self.f0_min),
             float(self.f0_max))
-        f0 = pitch_extractor.extract(audio, uv_interp=True, device=self.device)
+        f0 = pitch_extractor.extract(audio, uv_interp=True, device=self.device, silence_front=slience_front)
         f0 = torch.from_numpy(f0).float().to(self.device).unsqueeze(-1).unsqueeze(0)
         f0 = f0 * 2 ** (float(pitch_adjust) / 12)
         
@@ -122,7 +128,12 @@ class SvcDDSP:
             output, _, (s_h, s_n) = self.model(units, f0, volume, spk_id = spk_id, spk_mix_dict = self.spk_mix_dict)
             output *= mask
             if self.vocoder_based_enhancer:
-                output, output_sample_rate = self.enhancer.enhance(output, self.args.data.sampling_rate, f0, self.args.data.block_size)
+                output, output_sample_rate = self.enhancer.enhance(
+                                                                output, 
+                                                                self.args.data.sampling_rate, 
+                                                                f0, 
+                                                                self.args.data.block_size,
+                                                                slience_front = slience_front)
             else:
                 output_sample_rate = self.args.data.sampling_rate
 

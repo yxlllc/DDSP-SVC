@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
 from nsf_hifigan.nvSTFT import STFT
 from nsf_hifigan.models import load_model
 from torchaudio.transforms import Resample
@@ -24,7 +25,16 @@ class Enhancer:
                 sample_rate,
                 f0, # 1, n_frames, 1
                 hop_size,
-                adaptive_key = 0):
+                adaptive_key = 0,
+                silence_front = 0
+                ):
+        # enhancer start time 
+        start_frame = int(silence_front * sample_rate / hop_size)
+        real_silence_front = start_frame * hop_size / sample_rate
+        audio = audio[:, int(np.round(real_silence_front * sample_rate)) : ]
+        f0 = f0[: , start_frame :, :]
+        
+        # adaptive parameters
         adaptive_factor = 2 ** ( -adaptive_key / 12)
         adaptive_sample_rate = 100 * int(np.round(self.enhancer_sample_rate / adaptive_factor / 100))
         real_factor = sample_rate / adaptive_sample_rate
@@ -57,7 +67,11 @@ class Enhancer:
             if key_str not in self.resample_kernel:
                 self.resample_kernel[key_str] = Resample(adaptive_sample_rate, enhancer_sample_rate, lowpass_filter_width = 128).to(self.device)
             enhanced_audio =  self.resample_kernel[key_str](enhanced_audio)
-
+        
+        # pad the silence frames
+        if start_frame > 0:
+            enhanced_audio = F.pad(enhanced_audio, (int(np.round(enhancer_sample_rate * real_silence_front)), 0))
+            
         return enhanced_audio, enhancer_sample_rate
         
         

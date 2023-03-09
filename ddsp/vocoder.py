@@ -21,8 +21,13 @@ class F0_Extractor:
         self.f0_min = f0_min
         self.f0_max = f0_max
     
-    def extract(self, audio, uv_interp = False, device = None): # audio: 1d numpy array
+    def extract(self, audio, uv_interp = False, device = None, silence_front = 0): # audio: 1d numpy array
+        # extractor start time
         n_frames = int(len(audio) // self.hop_size) + 1
+                
+        start_frame = int(silence_front * self.sample_rate / self.hop_size)
+        real_silence_front = start_frame * self.hop_size / self.sample_rate
+        audio = audio[int(np.round(real_silence_front * self.sample_rate)) : ]
         
         # extract f0 using parselmouth
         if self.f0_extractor == 'parselmouth':
@@ -31,8 +36,8 @@ class F0_Extractor:
                 voicing_threshold = 0.6,
                 pitch_floor = self.f0_min, 
                 pitch_ceiling = self.f0_max).selected_array['frequency']
-            pad_size=(int(len(audio) // self.hop_size) - len(f0) + 1) // 2
-            f0 = np.pad(f0,[[pad_size, n_frames - len(f0) - pad_size]], mode='constant')
+            pad_size = start_frame + (int(len(audio) // self.hop_size) - len(f0) + 1) // 2
+            f0 = np.pad(f0,(pad_size, n_frames - len(f0) - pad_size))
             
         # extract f0 using dio
         elif self.f0_extractor == 'dio':
@@ -44,7 +49,7 @@ class F0_Extractor:
                 channels_in_octave=2, 
                 frame_period = (1000 * self.hop_size / self.sample_rate))
             f0 = pw.stonemask(audio.astype('double'), _f0, t, self.sample_rate)
-            f0 = f0.astype('float')[:n_frames]
+            f0 = np.pad(f0.astype('float'), (start_frame, n_frames - len(f0) - start_frame))
         
         # extract f0 using harvest
         elif self.f0_extractor == 'harvest':
@@ -54,7 +59,7 @@ class F0_Extractor:
                 f0_floor = self.f0_min, 
                 f0_ceil = self.f0_max, 
                 frame_period = (1000 * self.hop_size / self.sample_rate))
-            f0 = f0.astype('float')[:n_frames]
+            f0 = np.pad(f0.astype('float'), (start_frame, n_frames - len(f0) - start_frame))
         
         # extract f0 using crepe        
         elif self.f0_extractor == 'crepe':
@@ -72,11 +77,12 @@ class F0_Extractor:
             f0 = torch.where(torch.isnan(f0), torch.full_like(f0, 0), f0)
             
             f0 = f0.squeeze(0).cpu().numpy()
-            f0 = np.array([f0[int(min(int(np.round(n * self.hop_size / self.sample_rate / 0.005)), len(f0) - 1))] for n in range(n_frames)])
+            f0 = np.array([f0[int(min(int(np.round(n * self.hop_size / self.sample_rate / 0.005)), len(f0) - 1))] for n in range(n_frames - start_frame)])
+            f0 = np.pad(f0, (start_frame, 0))
            
         else:
             raise ValueError(f" [x] Unknown f0 extractor: {f0_extractor}")
-        
+                    
         # interpolate the unvoiced f0 
         if uv_interp:
             uv = f0 == 0
