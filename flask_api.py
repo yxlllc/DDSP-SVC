@@ -24,6 +24,9 @@ logging.getLogger("numba").setLevel(logging.WARNING)
 def voice_change_model():
     request_form = request.form
     wave_file = request.files.get("sample", None)
+    # get fSafePrefixPadLength
+    f_safe_prefix_pad_length = float(request_form.get("fSafePrefixPadLength", 0))
+    print("f_safe_prefix_pad_length:"+str(f_safe_prefix_pad_length))
     # 变调信息
     f_pitch_change = float(request_form.get("fPitchChange", 0))
     # 获取spk_id
@@ -36,7 +39,7 @@ def voice_change_model():
     # http获得wav文件并转换
     input_wav_read = io.BytesIO(wave_file.read())
     # 模型推理
-    _audio, _model_sr = svc_model.infer(input_wav_read, f_pitch_change, int_speak_id)
+    _audio, _model_sr = svc_model.infer(input_wav_read, f_pitch_change, int_speak_id, f_safe_prefix_pad_length)
     tar_audio = librosa.resample(_audio, _model_sr, daw_sample)
     # 返回音频
     out_wav_path = io.BytesIO()
@@ -74,7 +77,7 @@ class SvcDDSP:
         if self.vocoder_based_enhancer:
             self.enhancer = Enhancer(self.args.enhancer.type, self.args.enhancer.ckpt, device=self.device)
 
-    def infer(self, input_wav, pitch_adjust, speaker_id):
+    def infer(self, input_wav, pitch_adjust, speaker_id, safe_prefix_pad_length):
         print("Infer!")
         # load input
         audio, sample_rate = librosa.load(input_wav, sr=None, mono=True)
