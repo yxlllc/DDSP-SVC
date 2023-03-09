@@ -53,7 +53,7 @@ class SvcDDSP:
                  f0_min, f0_max, threhold, spk_id, spk_mix_dict, enable_spk_id_cover):
         self.model_path = model_path
         self.vocoder_based_enhancer = vocoder_based_enhancer
-        self.enhancer_adaptive_key = enhancer_adaptive_key.
+        self.enhancer_adaptive_key = enhancer_adaptive_key
         self.input_pitch_extractor = input_pitch_extractor
         self.f0_min = f0_min
         self.f0_max = f0_max
