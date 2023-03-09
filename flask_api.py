@@ -135,7 +135,7 @@ class SvcDDSP:
                                                                 f0, 
                                                                 self.args.data.block_size,
                                                                 adaptive_key = self.enhancer_adaptive_key,
-                                                                slience_front = slience_front)
+                                                                silence_front = silence_front)
             else:
                 output_sample_rate = self.args.data.sampling_rate
 
