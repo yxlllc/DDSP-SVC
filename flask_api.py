@@ -89,7 +89,7 @@ class SvcDDSP:
         if safe_prefix_pad_length > 0.03:
             silence_front = safe_prefix_pad_length - 0.03
         else:
-            slience_front = 0
+            silence_front = 0
             
         # extract f0
         pitch_extractor = F0_Extractor(
@@ -98,7 +98,7 @@ class SvcDDSP:
             hop_size,
             float(self.f0_min),
             float(self.f0_max))
-        f0 = pitch_extractor.extract(audio, uv_interp=True, device=self.device, silence_front=slience_front)
+        f0 = pitch_extractor.extract(audio, uv_interp=True, device=self.device, silence_front=silence_front)
         f0 = torch.from_numpy(f0).float().to(self.device).unsqueeze(-1).unsqueeze(0)
         f0 = f0 * 2 ** (float(pitch_adjust) / 12)
         
@@ -133,7 +133,7 @@ class SvcDDSP:
                                                                 self.args.data.sampling_rate, 
                                                                 f0, 
                                                                 self.args.data.block_size,
-                                                                slience_front = slience_front)
+                                                                silence_front = silence_front)
             else:
                 output_sample_rate = self.args.data.sampling_rate
 
