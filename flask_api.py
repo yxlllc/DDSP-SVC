@@ -49,10 +49,11 @@ def voice_change_model():
 
 
 class SvcDDSP:
-    def __init__(self, model_path, vocoder_based_enhancer, input_pitch_extractor,
+    def __init__(self, model_path, vocoder_based_enhancer, enhancer_adaptive_key, input_pitch_extractor,
                  f0_min, f0_max, threhold, spk_id, spk_mix_dict, enable_spk_id_cover):
         self.model_path = model_path
         self.vocoder_based_enhancer = vocoder_based_enhancer
+        self.enhancer_adaptive_key = enhancer_adaptive_key.
         self.input_pitch_extractor = input_pitch_extractor
         self.f0_min = f0_min
         self.f0_max = f0_max
@@ -133,7 +134,8 @@ class SvcDDSP:
                                                                 self.args.data.sampling_rate, 
                                                                 f0, 
                                                                 self.args.data.block_size,
-                                                                silence_front = silence_front)
+                                                                adaptive_key = self.enhancer_adaptive_key,
+                                                                slience_front = slience_front)
             else:
                 output_sample_rate = self.args.data.sampling_rate
 
@@ -147,8 +149,10 @@ if __name__ == "__main__":
     # flask部分来自diffsvc小狼大佬编写的代码。
     # config和模型得同一目录。
     checkpoint_path = "exp/combsub-test/model_550000.pt"
-    # 是否使用预训练的基于声码器的增强器增强输出，正常音域范围内的高音频质量，但对硬件要求更高。
+    # 是否使用预训练的基于声码器的增强器增强输出，但对硬件要求更高。
     use_vocoder_based_enhancer = True
+    # 结合增强器使用，0为正常音域范围（最高G5)内的高音频质量，大于0则可以防止超高音破音
+    enhancer_adaptive_key = 0
     # f0提取器，有parselmouth, dio, harvest, crepe
     select_pitch_extractor = 'crepe'
     # f0范围限制(Hz)
@@ -159,12 +163,10 @@ if __name__ == "__main__":
     # 默认说话人。以及是否优先使用默认说话人覆盖vst传入的参数。
     spk_id = 1
     enable_spk_id_cover = True
-    
     # 混合说话人字典（捏音色功能）
     # 设置为非 None 字典会覆盖 spk_id
     spk_mix_dict = None # {1:0.5, 2:0.5} 表示1号说话人和2号说话人的音色按照0.5:0.5的比例混合
-
-    svc_model = SvcDDSP(checkpoint_path, use_vocoder_based_enhancer, select_pitch_extractor,
+    svc_model = SvcDDSP(checkpoint_path, use_vocoder_based_enhancer, enhancer_adaptive_key, select_pitch_extractor,
                         limit_f0_min, limit_f0_max, threhold, spk_id, spk_mix_dict, enable_spk_id_cover)
 
     # 此处与vst插件对应，端口必须接上。
