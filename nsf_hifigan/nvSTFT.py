@@ -100,7 +100,7 @@ class STFT():
             self.hann_window[keyshift_key] = torch.hann_window(win_size_new).to(y.device)
         
         pad_left = (win_size_new - hop_length_new) //2
-        pad_right = (win_size_new- hop_length_new + 1) //2
+        pad_right = max((win_size_new- hop_length_new + 1) //2, win_size_new - y.size(-1) - pad_left)
         if pad_right < y.size(-1):
             mode = 'reflect'
         else:
