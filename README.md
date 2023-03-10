@@ -14,7 +14,7 @@ Although the original synthesis quality of DDSP is not ideal (the original outpu
 
 If the quality of the training data is very high, probably still Diff-SVC will have the highest sound quality. The demo outputs are in the `samples` folder,  and the related model checkpoint can be downloaded from the release page.
 
-Disclaimer: Please make sure to only train DDSP-SVC models with legally obtained authorized data, and do not use these models and any audio they synthesize for illegal purposes. The author of this repository is not responsible for any infringement, fraud and other illegal acts caused by the use of these model checkpoints and audio.
+Disclaimer: Please make sure to only train DDSP-SVC models with **legally obtained authorized data**, and do not use these models and any audio they synthesize for illegal purposes. The author of this repository is not responsible for any infringement, fraud and other illegal acts caused by the use of these model checkpoints and audio.
 
 ## 1. Installing the dependencies
 We recommend first installing PyTorch from the [**official website**](https://pytorch.org/), then run:
