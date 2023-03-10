@@ -37,7 +37,7 @@ class Enhancer:
         # adaptive parameters
         adaptive_factor = 2 ** ( -adaptive_key / 12)
         adaptive_sample_rate = 100 * int(np.round(self.enhancer_sample_rate / adaptive_factor / 100))
-        real_factor = sample_rate / adaptive_sample_rate
+        real_factor = self.enhancer_sample_rate / adaptive_sample_rate
         
         # resample the ddsp output
         if sample_rate == adaptive_sample_rate:
