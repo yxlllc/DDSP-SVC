@@ -14,5 +14,6 @@ resampy
 scikit_learn
 scipy
 SoundFile
+tensorboard
 torchcrepe
 tqdm
