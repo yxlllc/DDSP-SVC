@@ -8,11 +8,13 @@ End-to-end singing voice conversion system based on DDSP (Differentiable Digital
 ## 0. Introduction
 DDSP-SVC is a new open source singing voice conversion project dedicated to the development of free AI voice changer software that can be popularized on personal computers.
 
-Compared with the more famous [Diff-SVC](https://github.com/prophesier/diff-svc) and [SO-VITS-SVC](https://github.com/innnky/so-vits-svc),  its training and synthesis have much lower requirements for computer hardware, and the training time can be shortened by orders of magnitude.
+Compared with the more famous [Diff-SVC](https://github.com/prophesier/diff-svc) and [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc),  its training and synthesis have much lower requirements for computer hardware, and the training time can be shortened by orders of magnitude.
 
 Although the original synthesis quality of DDSP is not ideal (the original output can be heard in tensorboard while training), after using the pre-trained vocoder-based enhancer, the sound quality can reach a level close to SO-VITS-SVC.
 
 If the quality of the training data is very high, probably still Diff-SVC will have the highest sound quality. The demo outputs are in the `samples` folder,  and the related model checkpoint can be downloaded from the release page.
+
+Disclaimer: Please make sure to only train DDSP-SVC models with legally obtained authorized data, and do not use these models and any audio they synthesize for illegal purposes. The author of this repository is not responsible for any infringement, fraud and other illegal acts caused by the use of these model checkpoints and audio.
 
 ## 1. Installing the dependencies
 We recommend first installing PyTorch from the [**official website**](https://pytorch.org/), then run:

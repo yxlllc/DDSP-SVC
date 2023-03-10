@@ -8,11 +8,13 @@ Language: [English](./README.md) ** 简体中文 **
 ## 0.简介
 DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个人电脑上普及的自由AI变声器软件。
 
-相比于比较著名的 [Diff-SVC](https://github.com/prophesier/diff-svc) 和 [SO-VITS-SVC](https://github.com/innnky/so-vits-svc), 它训练和合成对电脑硬件的要求要低的多，并且训练时长有数量级的缩短。
+相比于比较著名的 [Diff-SVC](https://github.com/prophesier/diff-svc) 和 [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc), 它训练和合成对电脑硬件的要求要低的多，并且训练时长有数量级的缩短。
 
 虽然 DDSP 的原始合成质量不是很理想（训练时在 tensorboard 中可以听到原始输出），但在使用基于预训练声码器的增强器增强音质后，可以达到接近 SOVITS-SVC 的合成质量。
 
 如果训练数据的质量非常高，可能仍然 Diff-SVC 将拥有最高的合成质量。在`samples`文件夹中包含合成示例，相关模型检查点可以从仓库发布页面下载。
+
+免责声明：请确保仅使用合法获得的授权数据训练 DDSP-SVC 模型，不要将这些模型及其合成的任何音频用于非法目的。 本库作者不对因使用这些模型检查点和音频而造成的任何侵权，诈骗等违法行为负责。
 
 ## 1. 安装依赖
 我们推荐从 [**PyTorch 官方网站 **](https://pytorch.org/) 下载 PyTorch.
