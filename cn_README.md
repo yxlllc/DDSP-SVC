@@ -33,6 +33,12 @@ pip install -r requirements.txt
 
 将所有的验证集数据 (.wav 格式音频切片) 放到 `data/val/audio`.
 
+你也可以运行
+```bash
+python draw.py
+```
+帮助你挑选验证集数据（可以调整 `draw.py` 中的参数修改抽取文件的数量等参数）
+
 接着运行
 ```bash
 python preprocess.py -c configs/combsub.yaml

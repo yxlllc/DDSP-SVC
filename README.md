@@ -31,6 +31,12 @@ Put all the training dataset (.wav format audio clips) in the below directory:
 `data/train/audio`. 
 Put all the validation dataset (.wav format audio clips) in the below directory:
 `data/val/audio`.
+You can also run
+```bash
+python draw.py
+```
+to help you select validation data (you can adjust the parameters in `draw.py` to modify the number of extracted files and other parameters)
+
 Then run
 ```bash
 python preprocess.py -c configs/combsub.yaml
