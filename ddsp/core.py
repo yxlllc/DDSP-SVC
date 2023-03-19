@@ -115,13 +115,12 @@ def fft_convolve(audio,
 
     # Cut audio into 50% overlapped frames (center padding).
     hop_size = int(audio_size / n_ir_frames)
-    frame_size = 2 * hop_size
-    unfold = torch.nn.Unfold(kernel_size=(1, frame_size), stride=(1, hop_size))
-    audio_frames = unfold(F.pad(audio, (hop_size, hop_size)).unsqueeze(1).unsqueeze(1)).transpose(1, 2) # B, n_frames+1, 2*hop_size
+    frame_size = 2 * hop_size    
+    audio_frames = F.pad(audio, (hop_size, hop_size)).unfold(1, frame_size, hop_size)
     
     # Apply Bartlett (triangular) window
     window = torch.bartlett_window(frame_size).to(audio_frames)
-    audio_frames *= window
+    audio_frames = audio_frames * window
     
     # Pad and FFT the audio and impulse responses.
     fft_size = get_fft_size(frame_size, ir_size, power_of_2=False)
