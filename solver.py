@@ -86,13 +86,12 @@ def train(args, initial_global_step, model, optimizer, loss_func, loader_train, 
             optimizer.zero_grad()
 
             # unpack data
-            
             for k in data.keys():
                 if k != 'name':
                     data[k] = data[k].to(args.device)
             
             # forward
-            signal, _, (s_h, s_n) = model(data['units'], data['f0'], data['volume'], data['spk_id'])
+            signal, _, (s_h, s_n) = model(data['units'], data['f0'], data['volume'], data['spk_id'], infer=False)
 
             # loss
             loss = loss_func(signal, data['audio'])

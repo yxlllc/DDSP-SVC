@@ -237,7 +237,7 @@ class Sins(torch.nn.Module):
         }
         self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map)
 
-    def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, initial_phase=None, max_upsample_dim=32):
+    def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, initial_phase=None, infer=True, max_upsample_dim=32):
         '''
             units_frames: B x n_frames x n_unit
             f0_frames: B x n_frames x 1
@@ -246,12 +246,14 @@ class Sins(torch.nn.Module):
         '''
         # exciter phase
         f0 = upsample(f0_frames, self.block_size)
-        if initial_phase is None:
-            initial_phase = torch.zeros(f0.shape[0], 1, 1).to(f0)
-            
-        x = torch.cumsum(f0.double() / self.sampling_rate, axis=1) + initial_phase.double() / 2 / np.pi
+        if infer:
+            x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
+        else:
+            x = torch.cumsum(f0 / self.sampling_rate, axis=1)
+        if initial_phase is not None:
+            x += initial_phase.to(x) / 2 / np.pi    
         x = x - torch.round(x)
-        x = x.float()
+        x = x.to(f0)
         
         phase = 2 * np.pi * x
         phase_frames = phase[:, ::self.block_size, :]
@@ -282,7 +284,7 @@ class Sins(torch.nn.Module):
                         hann_window = False)
                         
         # noise part filter 
-        noise = torch.rand_like(harmonic).to(noise_param) * 2 - 1
+        noise = torch.rand_like(harmonic) * 2 - 1
         noise = frequency_filter(
                         noise,
                         torch.complex(noise_param, torch.zeros_like(noise_param)),
@@ -315,7 +317,7 @@ class CombSub(torch.nn.Module):
         }
         self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map)
 
-    def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, initial_phase=None, **kwargs):
+    def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, initial_phase=None, infer=True, **kwargs):
         '''
             units_frames: B x n_frames x n_unit
             f0_frames: B x n_frames x 1
@@ -324,12 +326,14 @@ class CombSub(torch.nn.Module):
         '''
         # exciter phase
         f0 = upsample(f0_frames, self.block_size)
-        if initial_phase is None:
-            initial_phase = torch.zeros(f0.shape[0], 1, 1).to(f0)
-            
-        x = torch.cumsum(f0.double() / self.sampling_rate, axis=1) + initial_phase.double() / 2 / np.pi
+        if infer:
+            x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
+        else:
+            x = torch.cumsum(f0 / self.sampling_rate, axis=1)
+        if initial_phase is not None:
+            x += initial_phase.to(x) / 2 / np.pi    
         x = x - torch.round(x)
-        x = x.float()
+        x = x.to(f0)
         
         phase_frames = 2 * np.pi * x[:, ::self.block_size, :]
         
@@ -356,7 +360,7 @@ class CombSub(torch.nn.Module):
                         half_width_frames = 1.5 * self.sampling_rate / (f0_frames + 1e-3))
                   
         # noise part filter (using constant-windowed LTV-FIR, without group-delay)
-        noise = torch.rand_like(harmonic).to(noise_param) * 2 - 1
+        noise = torch.rand_like(harmonic) * 2 - 1
         noise = frequency_filter(
                         noise,
                         torch.complex(noise_param, torch.zeros_like(noise_param)),
