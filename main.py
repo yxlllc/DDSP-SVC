@@ -195,6 +195,8 @@ if __name__ == '__main__':
     if cmd.enhance == 'true':
         print('Enhancer type: ' + args.enhancer.type)
         enhancer = Enhancer(args.enhancer.type, args.enhancer.ckpt, device=device)
+    else:
+        print('Enhancer type: none (using raw output of ddsp)')
     
     # speaker id or mix-speaker dictionary
     spk_mix_dict = literal_eval(cmd.spk_mix_dict)
