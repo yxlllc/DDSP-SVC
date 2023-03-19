@@ -145,10 +145,10 @@ class SvcDDSP:
 
 if __name__ == "__main__":
     # ddsp-svc下只需传入下列参数。
-    # 对接的是串串香火锅大佬https://github.com/zhaohui8969/VST_NetProcess-。建议使用2.0版本。
+    # 对接的是串串香火锅大佬https://github.com/zhaohui8969/VST_NetProcess-。建议使用最新版本。
     # flask部分来自diffsvc小狼大佬编写的代码。
     # config和模型得同一目录。
-    checkpoint_path = "exp/combsub-test/model_550000.pt"
+    checkpoint_path = "exp/multi_speaker/model_300000.pt"
     # 是否使用预训练的基于声码器的增强器增强输出，但对硬件要求更高。
     use_vocoder_based_enhancer = True
     # 结合增强器使用，0为正常音域范围（最高G5)内的高音频质量，大于0则可以防止超高音破音

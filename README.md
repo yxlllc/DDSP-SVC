@@ -130,7 +130,16 @@ UPDATE：Mix-speaker is supported now. You can use "-mix" option to design your 
 python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -e true -eak 0
 
 ```
-## 7. Acknowledgement
+## 7. HTTP Server and VST supported
+Start the server with the following command
+```bash
+# configs are in this python file, see the comments (Chinese only)
+python flask_api.py
+```
+Currently supported VST client:
+https://github.com/zhaohui8969/VST_NetProcess-
+
+## 8. Acknowledgement
 * [ddsp](https://github.com/magenta/ddsp)
 * [pc-ddsp](https://github.com/yxlllc/pc-ddsp)
 * [soft-vc](https://github.com/bshall/soft-vc)
