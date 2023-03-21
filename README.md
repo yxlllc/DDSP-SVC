@@ -112,7 +112,7 @@ NOTE: The test audio samples in Tensorboard are the original outputs of your DDS
 ```bash
 # origin output of ddsp-svc
 # fast, but relatively low audio quality (like you hear in tensorboard)
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id>
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -e false -id <speaker_id>
 ```
 ```bash
 # enhanced the output using the pretrained vocoder-based enhancer 

@@ -117,7 +117,7 @@ tensorboard --logdir=exp
 ```bash
 # 以下是 ddsp-svc 变声器的原始输出 
 # 速度快，但音质相对较低（像您在tensorboard里听到的那样）
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id>
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -e false -id <speaker_id>
 ```
 ```bash
 # 使用预训练声码器增强输出结果

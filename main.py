@@ -66,8 +66,8 @@ def parse_args(args=None, namespace=None):
         "--enhance",
         type=str,
         required=False,
-        default='false',
-        help="true or false | default: false",
+        default='true',
+        help="true or false | default: true",
     )
     parser.add_argument(
         "-pe",
