@@ -10,11 +10,13 @@ DDSP-SVC is a new open source singing voice conversion project dedicated to the 
 
 Compared with the more famous [Diff-SVC](https://github.com/prophesier/diff-svc) and [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc),  its training and synthesis have much lower requirements for computer hardware, and the training time can be shortened by orders of magnitude.
 
-Although the original synthesis quality of DDSP is not ideal (the original output can be heard in tensorboard while training), after using the pre-trained vocoder-based enhancer, the sound quality can reach a level close to SO-VITS-SVC.
+Although the original synthesis quality of DDSP is not ideal (the original output can be heard in tensorboard while training), after using the pre-trained vocoder-based enhancer, the sound quality for some dateset can reach a level close to SO-VITS-SVC.
 
 If the quality of the training data is very high, probably still Diff-SVC will have the highest sound quality. The demo outputs are in the `samples` folder,  and the related model checkpoint can be downloaded from the release page.
 
 Disclaimer: Please make sure to only train DDSP-SVC models with **legally obtained authorized data**, and do not use these models and any audio they synthesize for illegal purposes. The author of this repository is not responsible for any infringement, fraud and other illegal acts caused by the use of these model checkpoints and audio.
+
+Update log: I am too lazy to translate, please see the Chinese version readme.
 
 ## 1. Installing the dependencies
 We recommend first installing PyTorch from the [**official website**](https://pytorch.org/), then run:
@@ -41,7 +43,7 @@ Then run
 ```bash
 python preprocess.py -c configs/combsub.yaml
 ```
-for a model of combtooth substractive synthesiser, or run
+for a model of combtooth substractive synthesiser (**recommend**), or run
 ```bash
 python preprocess.py -c configs/sins.yaml
 ```
@@ -54,6 +56,8 @@ NOTE 1: Please keep the sampling rate of all audio clips consistent with the sam
 NOTE 2: The total number of the audio clips for training dataset is recommended to be about 1000,  especially long audio clip can be cut into short segments, which will speed up the training, but the duration of all audio clips should not be less than 2 seconds. If there are too many audio clips, you need a large internal-memory or set the 'cache_all_data' option to false in the configuration file.
 
 NOTE 3: The total number of the audio clips for validation dataset is recommended to be about 10, please don't put too many or it will be very slow to do the validation.
+
+NOTE 4:  If your dataset is not very high quality, set 'f0_extractor' to 'crepe' in the config file.  The crepe algorithm has the best noise immunity, but at the cost of greatly increasing the time required for data preprocessing.
 
 UPDATE: Multi-speaker training is supported now. The 'n_spk' parameter in configuration file controls whether it is a multi-speaker model.  If you want to train a **multi-speaker** model, audio folders need to be named with **positive integers not greater than 'n_spk'** to represent speaker ids, the directory structure is like below:
 ```bash
@@ -109,26 +113,25 @@ Test audio samples will be visible in TensorBoard after the first validation.
 
 NOTE: The test audio samples in Tensorboard are the original outputs of your DDSP-SVC model that is not enhanced by an enhancer. If you want to test the synthetic effect after using the enhancer  (which may have higher quality) , please use the method described in the following chapter.
 ## 6. Testing
+(**Recommend**) Enhance the output using the pretrained vocoder-based enhancer:
 ```bash
-# origin output of ddsp-svc
-# fast, but relatively low audio quality (like you hear in tensorboard)
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -e false -id <speaker_id>
-```
-```bash
-# enhanced the output using the pretrained vocoder-based enhancer 
 # high audio quality in the normal vocal range if enhancer_adaptive_key = 0 (default)
 # set enhancer_adaptive_key > 0 to adapt the enhancer to a higher vocal range
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -e true -eak <enhancer_adaptive_key (semitones)>
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -eak <enhancer_adaptive_key (semitones)>
 ```
+Raw output of DDSP:
 ```bash
-# other options about the f0 extractor and response threhold, see
+# fast, but relatively low audio quality (like you hear in tensorboard)
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -e false
+```
+Other options about the f0 extractor and response threhold，see:
+```bash
 python main.py -h
 ```
-UPDATE：Mix-speaker is supported now. You can use "-mix" option to design your own vocal timbre, below is an example:
+(UPDATE) Mix-speaker is supported now. You can use "-mix" option to design your own vocal timbre, below is an example:
 ```bash
 # Mix the timbre of 1st and 2nd speaker in a 0.5 to 0.5 ratio
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -e true -eak 0
-
+python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -eak 0
 ```
 ## 7. HTTP Server and VST supported
 Start the server with the following command
