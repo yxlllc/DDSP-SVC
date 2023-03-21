@@ -13,7 +13,10 @@ data:
   train_path: data/train # Create a folder named "audio" under this path and put the audio clip in it
   valid_path: data/val # Create a folder named "audio" under this path and put the audio clip in it
 model:
-  type: 'CombSubFast'
+  type: 'CombSub'
+  n_mag_allpass: 256
+  n_mag_harmonic:  512
+  n_mag_noise: 256
   n_spk: 1 # max number of different speakers
 enhancer:
     type: 'nsf-hifigan'
