@@ -78,8 +78,7 @@ def get_data_loaders(args, whole_audio=False):
         data_valid,
         batch_size=1,
         shuffle=False,
-        num_workers=args.train.num_workers,
-        persistent_workers=(args.train.num_workers > 0),
+        num_workers=0,
         pin_memory=True
     )
     return loader_train, loader_valid 
