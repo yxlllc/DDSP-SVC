@@ -91,7 +91,7 @@ def train(args, initial_global_step, model, optimizer, loss_func, loader_train, 
                     data[k] = data[k].to(args.device)
             
             # forward
-            signal, _, (s_h, s_n) = model(data['units'], data['f0'], data['volume'], data['spk_id'], infer=False)
+            signal, _, (s_h, s_n) = model(data['units'].float(), data['f0'], data['volume'], data['spk_id'], infer=False)
 
             # loss
             loss = loss_func(signal, data['audio'])

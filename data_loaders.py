@@ -57,7 +57,8 @@ def get_data_loaders(args, whole_audio=False):
         load_all_data=args.train.cache_all_data,
         whole_audio=whole_audio,
         n_spk=args.model.n_spk,
-        device=args.train.cache_device)
+        device=args.train.cache_device,
+        fp16=args.train.cache_fp16)
     loader_train = torch.utils.data.DataLoader(
         data_train ,
         batch_size=args.train.batch_size if not whole_audio else 1,
@@ -94,7 +95,8 @@ class AudioDataset(Dataset):
         load_all_data=True,
         whole_audio=False,
         n_spk=1,
-        device = 'cpu'
+        device = 'cpu',
+        fp16 = False
     ):
         super().__init__()
         
@@ -139,12 +141,16 @@ class AudioDataset(Dataset):
                 audio, sr = librosa.load(path_audio, sr=self.sample_rate)
                 if len(audio.shape) > 1:
                     audio = librosa.to_mono(audio)
-                audio = torch.from_numpy(audio).float().to(device)
+                audio = torch.from_numpy(audio).to(device)
                 
                 path_units = os.path.join(self.path_root, 'units', name) + '.npy'
                 units = np.load(path_units)
-                units = torch.from_numpy(units).float().to(device)
+                units = torch.from_numpy(units).to(device)
                 
+                if fp16:
+                    audio = audio.half()
+                    units = units.half()
+                    
                 self.data_buffer[name] = {
                         'duration': duration,
                         'audio': audio,
