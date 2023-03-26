@@ -7,6 +7,7 @@ import pyworld as pw
 import parselmouth
 import torchcrepe
 import resampy
+from fairseq import checkpoint_utils
 from encoder.hubert.model import HubertSoft
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from torchaudio.transforms import Resample
@@ -111,9 +112,17 @@ class Units_Encoder:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = device
         
+        is_loaded_encoder = False
         if encoder == 'hubertsoft':
             self.model = Audio2HubertSoft(encoder_ckpt).to(device)
-        else:
+            is_loaded_encoder = True
+        if encoder == 'hubertbase':
+            self.model = Audio2HubertBase(encoder_ckpt, device=device)
+            is_loaded_encoder = True
+        if encoder == 'contentvec':
+            self.model = Audio2ContentVec(encoder_ckpt, device=device)
+            is_loaded_encoder = True
+        if not is_loaded_encoder:
             raise ValueError(f" [x] Unknown units encoder: {encoder}")
             
         self.resample_kernel = {}
@@ -162,7 +171,61 @@ class Audio2HubertSoft(torch.nn.Module):
         with torch.inference_mode():  
             units = self.hubert.units(audio.unsqueeze(1))
             return units
-            
+
+
+class Audio2ContentVec():
+    def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu'):
+        self.device = device
+        print(' [Encoder Model] Content Vec')
+        print(' [Loading] ' + path)
+        self.models, self.saved_cfg, self.task = checkpoint_utils.load_model_ensemble_and_task([path], suffix="", )
+        self.hubert = self.models[0]
+        self.hubert = self.hubert.to(self.device)
+        self.hubert.eval()
+
+    def __call__(self,
+                 audio):  # B, T
+        # wav_tensor = torch.from_numpy(audio).to(self.device)
+        wav_tensor = audio
+        feats = wav_tensor.view(1, -1)
+        padding_mask = torch.BoolTensor(feats.shape).fill_(False)
+        inputs = {
+            "source": feats.to(wav_tensor.device),
+            "padding_mask": padding_mask.to(wav_tensor.device),
+            "output_layer": 9,  # layer 9
+        }
+        with torch.no_grad():
+            logits = self.hubert.extract_features(**inputs)
+            feats = self.hubert.final_proj(logits[0])
+        units = feats  # .transpose(2, 1)
+        return units
+
+
+class Audio2HubertBase():
+    def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu'):
+        self.device = device
+        print(' [Encoder Model] HuBERT Base')
+        print(' [Loading] ' + path)
+        self.models, self.saved_cfg, self.task = checkpoint_utils.load_model_ensemble_and_task([path], suffix="", )
+        self.hubert = self.models[0]
+        self.hubert = self.hubert.to(self.device)
+        self.hubert = self.hubert.float()
+        self.hubert.eval()
+
+    def __call__(self,
+                 audio):  # B, T
+        with torch.no_grad():
+            padding_mask = torch.BoolTensor(audio.shape).fill_(False)
+            inputs = {
+                "source": audio.to(self.device),
+                "padding_mask": padding_mask.to(self.device),
+                "output_layer": 9,  # layer 9
+            }
+            logits = self.hubert.extract_features(**inputs)
+            units = self.hubert.final_proj(logits[0])
+            return units
+
+
 class DotDict(dict):
     def __getattr__(*args):         
         val = dict.get(*args)         
@@ -218,8 +281,8 @@ def load_model(
     model.load_state_dict(ckpt['model'])
     model.eval()
     return model, args
-    
- 
+
+
 class Sins(torch.nn.Module):
     def __init__(self, 
             sampling_rate,
