@@ -30,7 +30,7 @@ train:
   num_workers: 2 # If your cpu and gpu are both very strong, set to 0 may be faster!
   batch_size: 24
   cache_all_data: true # Save Internal-Memory or Graphics-Memory if it is false, but may be slow
-  cache_device: 'cuda' # Set to 'cuda' to cache the data into the Graphics-Memory, fastest speed for strong gpu
+  cache_device: 'cpu' # Set to 'cuda' to cache the data into the Graphics-Memory, fastest speed for strong gpu
   cache_fp16: true
   epochs: 100000
   interval_log: 10
