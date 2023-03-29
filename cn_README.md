@@ -29,6 +29,7 @@ pip install -r requirements.txt
 ```
 注： 我只在 python 3.8 (windows) + pytorch 1.9.1 + torchaudio 0.6.0 测试过代码，太旧或太新的依赖可能会报错。
 ## 2. 配置预训练模型
+更新：现在支持 ContentVec 编码器了。你可以下载预训练 [ContentVec](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) 编码器替代 HubertSoft 编码器并修改配置文件以使用它。
 - **(必要操作)** 下载预训练 [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) 编码器并将其放到 `pretrain/hubert` 文件夹.
 -  从 [DiffSinger 社区声码器项目](https://openvpi.github.io/vocoders) 下载基于预训练声码器的增强器，并解压至 `pretrain/` 文件夹。
 ## 3. 预处理

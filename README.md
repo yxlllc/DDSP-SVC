@@ -25,6 +25,7 @@ pip install -r requirements.txt
 ```
 NOTE : I only test the code using python 3.8 (windows) + pytorch 1.9.1 + torchaudio 0.6.0, too new or too old dependencies may not work
 ## 2. Configuring the pretrained model
+UPDATE:  ContentVec encoder is supported now. You can download the pretrained [ContentVec](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) encoder instead of HubertSoft encoder and modify the configuration file to use it.
 - **(Required)** Download the pretrained [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt)   encoder and put it under `pretrain/hubert` folder.
 -  Get the pretrained vocoder-based enhancer from the [DiffSinger Community Vocoders Project](https://openvpi.github.io/vocoders) and unzip it into `pretrain/` folder
 ## 3. Preprocessing
