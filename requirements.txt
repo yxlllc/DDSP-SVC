@@ -19,3 +19,4 @@ tensorboard
 torchcrepe
 tqdm
 wave
+pysimplegui
