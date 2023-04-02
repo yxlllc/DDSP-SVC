@@ -1,6 +1,6 @@
 import PySimpleGUI as sg
 import sounddevice as sd
-import torch,librosa,threading,time
+import torch,librosa,threading,time,pickle
 from enhancer import Enhancer
 import numpy as np
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
@@ -99,31 +99,53 @@ class SvcDDSP:
             return output, output_sample_rate
 
 
+class Config:
+    def __init__(self) -> None:
+        self.samplerate=44100#Hz
+        self.block_time=1.5#s
+        self.f_pitch_change:float = 0.0#float(request_form.get("fPitchChange", 0))
+        self.spk_id = 1# 默认说话人。
+        self.spk_mix_dict = None # {1:0.5, 2:0.5} 表示1号说话人和2号说话人的音色按照0.5:0.5的比例混合
+        self.use_vocoder_based_enhancer = True
+        self.checkpoint_path=''
+        self.threhold=-35
+        self.buffer_num=2
+        self.crossfade_time=0.03
+        self.select_pitch_extractor='harvest'#F0预测器["parselmouth", "dio", "harvest", "crepe"]
+        self.use_spk_mix=False
+        self.sounddevices=['','']
+
+
+    def save(self,path):
+        with open(path+'\\config.pkl','wb') as f:
+            pickle.dump(self,f)
+            
+    def load(self,path)->bool:
+        try:
+            with open(path+'\\config.pkl','rb') as f:
+                self=pickle.load(f)
+            return True
+        except:
+            print('config.pkl does not exist')
+            return False
 
 
 class GUI:
     def __init__(self) -> None:
+        self.config = Config()
         self.flag_vc:bool=False#变声线程flag
-        self.samplerate=44100#Hz
-        self.block_time=1.5#s
         self.block_frame=0
         self.crossfade_frame=0
+        self.svc_model:SvcDDSP = None
         self.fade_in_window:np.ndarray=None#crossfade计算用numpy数组
         self.fade_out_window:np.ndarray=None#crossfade计算用numpy数组
-        self.f_safe_prefix_pad_length:float = 1.0
         self.input_wav:np.ndarray=None#输入音频规范化后的保存地址
         self.output_wav:np.ndarray=None#输出音频规范化后的保存地址
         self.temp_wav:np.ndarray=None#包含crossfade和输出音频的缓存区
-        self.f_pitch_change:float = 0.0#float(request_form.get("fPitchChange", 0))
         self.crossfade_last:np.ndarray=None#保存上一个output的crossfade
-        self.f0_mode=["parselmouth", "dio", "harvest", "crepe"]#F0预测器
-        self.spk_id = 1# 默认说话人。
-        self.svc_model:SvcDDSP = None
+        self.f0_mode_list=["parselmouth", "dio", "harvest", "crepe"]#F0预测器
+        self.f_safe_prefix_pad_length:float = 1.0
         self.launcher()#start
-        # 混合说话人字典（捏音色功能）
-        # 设置为非 None 字典会覆盖 spk_id
-        self.spk_mix_dict = None # {1:0.5, 2:0.5} 表示1号说话人和2号说话人的音色按照0.5:0.5的比例混合
-        self.use_vocoder_based_enhancer = True
 
 
     def launcher(self):
@@ -133,8 +155,12 @@ class GUI:
         # 界面布局
         layout = [
             [   sg.Frame(layout=[
-                    [sg.Input(key='sg_model',default_text='exp\\model_chino.pt'),sg.FileBrowse('选择模型文件')]
-                ],title='模型.pt格式(自动识别同目录下config.yaml)')
+                    [sg.Input(key='sg_model',default_text='exp\\model_chino.pt'),sg.FileBrowse('选择模型文件',key='choose_model')]
+                ],title='模型：.pt格式(自动识别同目录下config.yaml)'),
+                sg.Frame(layout=[
+                    [sg.Text('选择配置文件所在目录'),sg.Input(key='config_file_dir',default_text='exp'),sg.FolderBrowse('打开文件夹',key='choose_config')],
+                    [sg.Button('读取配置文件',key='load_config'),sg.Button('保存配置文件',key='save_config')]
+                ],title='快速配置文件')
             ],
             [   sg.Frame(layout=[
                     [sg.Text("输入设备"),sg.Combo(input_devices,key='sg_input_device',default_value=input_devices[sd.default.device[0]])],
@@ -152,7 +178,7 @@ class GUI:
                     [sg.Text("音频切分大小"),sg.Slider(range=(0.1,3.0),orientation='h',key='block',resolution=0.05,default_value=0.5)],
                     [sg.Text("交叉淡化时长"),sg.Slider(range=(0.02,0.1),orientation='h',key='crossfade',resolution=0.01)],
                     [sg.Text("使用历史区块数量"),sg.Slider(range=(1,10),orientation='h',key='buffernum',resolution=1,default_value=2)],
-                    [sg.Text("f0预测模式"),sg.Combo(values=self.f0_mode,key='f0_mode',default_value=self.f0_mode[2])],
+                    [sg.Text("f0预测模式"),sg.Combo(values=self.f0_mode_list,key='f0_mode',default_value=self.f0_mode_list[2])],
                     [sg.Checkbox(text='启用增强器',default=True,key='use_enhancer')]
                 ],title='性能设置'),
             ],
@@ -160,69 +186,94 @@ class GUI:
         ]
 
         # 创造窗口
-        window = sg.Window('DDSP - GUI by INT16', layout)
-        self.event_handler(window=window)
+        self.window = sg.Window('DDSP - GUI by INT16', layout)
+        self.event_handler()
 
 
-    def event_handler(self,window):
+    def event_handler(self):
         '''事件处理'''
         while True:#事件处理循环
-            event, values = window.read()
+            event, values = self.window.read()
             if event ==sg.WINDOW_CLOSED:   # 如果用户关闭窗口
                 self.flag_vc=False
                 exit()
             if event=='start_vc' and self.flag_vc==False:
                 #set values 和界面布局layout顺序一一对应
-                checkpoint_path = values['sg_model']                
-                self.set_devices(values["sg_input_device"],values['sg_output_device'])
-                self.spk_id=int(values['spk_id'])
-                threhold = values['noise']
-                self.f_pitch_change = values['pitch']
-                self.samplerate=int(values['samplerate'])
-                block_time = float(values['block'])
-                crossfade_time = values['crossfade']
-                buffer_num = int(values['buffernum'])
-                select_pitch_extractor=values['f0_mode']
-                self.use_vocoder_based_enhancer=values['use_enhancer']
-                if not values['spk_mix']:
-                    self.spk_mix_dict=None
-                self.block_frame=int(block_time*self.samplerate)
-                self.crossfade_frame=int(crossfade_time*self.samplerate)
-                self.f_safe_prefix_pad_length=block_time*(buffer_num)-crossfade_time*2
-                print('crossfade_time:'+str(crossfade_time))
-                print("buffer_num:"+str(buffer_num))
-                print("samplerate:"+str(self.samplerate))
-                print('block_time:'+str(block_time))
+                self.set_values(values)
+                print('crossfade_time:'+str(self.config.crossfade_time))
+                print("buffer_num:"+str(self.config.buffer_num))
+                print("samplerate:"+str(self.config.samplerate))
+                print('block_time:'+str(self.config.block_time))
                 print("prefix_pad_length:"+str(self.f_safe_prefix_pad_length))
-                print("mix_mode:"+str(self.spk_mix_dict))
-                print("enhancer:"+str(self.use_vocoder_based_enhancer))
-                self.start_vc(checkpoint_path,select_pitch_extractor,threhold,buffer_num)
+                print("mix_mode:"+str(self.config.spk_mix_dict))
+                print("enhancer:"+str(self.config.use_vocoder_based_enhancer))
+                print('using_cuda:'+str(torch.cuda.is_available()))
+                self.start_vc()
             if event=='stop_vc'and self.flag_vc==True:
                 self.flag_vc = False
             if event=='set_spk_mix' and self.flag_vc==False:
                 spk_mix = sg.popup_get_text(message='示例：1:0.3,2:0.5,3:0.2',title="设置混合音色，支持多人")
                 if spk_mix != None:
-                    self.spk_mix_dict=eval("{"+spk_mix.replace('，',',').replace('：',':')+"}")
+                    self.config.spk_mix_dict=eval("{"+spk_mix.replace('，',',').replace('：',':')+"}")
+            if event=='load_config' and self.flag_vc==False:
+                if self.config.load(values['config_file_dir']):
+                    self.update_values()
+            if event=='save_config' and self.flag_vc==False:
+                self.set_values(values)
+                self.config.save(values['config_file_dir'])
 
+    def set_values(self,values):
+        self.set_devices(values["sg_input_device"],values['sg_output_device'])
+        self.config.sounddevices=[values["sg_input_device"],values['sg_output_device']]
+        self.config.checkpoint_path = values['sg_model']
+        self.config.spk_id=int(values['spk_id'])
+        self.config.threhold = values['noise']
+        self.config.f_pitch_change = values['pitch']
+        self.config.samplerate=int(values['samplerate'])
+        self.config.block_time = float(values['block'])
+        self.config.crossfade_time = float(values['crossfade'])
+        self.config.buffer_num = int(values['buffernum'])
+        self.config.select_pitch_extractor=values['f0_mode']
+        self.config.use_vocoder_based_enhancer=values['use_enhancer']
+        self.config.use_spk_mix=values['spk_mix']
+        if not values['spk_mix']:
+            self.config.spk_mix_dict=None
+        self.block_frame=int(self.config.block_time*self.config.samplerate)
+        self.crossfade_frame=int(self.config.crossfade_time*self.config.samplerate)
+        self.f_safe_prefix_pad_length=self.config.block_time*(self.config.buffer_num)-self.config.crossfade_time*2
 
-    def start_vc(self,checkpoint_path,select_pitch_extractor,threhold,buffer_num):
+    def update_values(self):
+        self.window['sg_model'].update(self.config.checkpoint_path)
+        self.window['sg_input_device'].update(self.config.sounddevices[0])
+        self.window['sg_output_device'].update(self.config.sounddevices[1])
+        self.window['spk_id'].update(self.config.spk_id)
+        self.window['noise'].update(self.config.threhold)
+        self.window['pitch'].update(self.config.f_pitch_change)
+        self.window['samplerate'].update(self.config.samplerate)
+        self.window['spk_mix'].update(self.config.use_spk_mix)
+        self.window['block'].update(self.config.block_time)
+        self.window['crossfade'].update(self.config.crossfade_time)
+        self.window['buffernum'].update(self.config.buffer_num)
+        self.window['f0_mode'].update(self.config.select_pitch_extractor)
+        self.window['use_enhancer'].update(self.config.use_vocoder_based_enhancer)
+        
+
+    def start_vc(self):
         '''开始音频转换'''
         self.flag_vc = True
-        # 是否使用预训练的基于声码器的增强器增强输出，但对硬件要求更高。
-        
         enhancer_adaptive_key = 0
         # f0范围限制(Hz)
         limit_f0_min = 50
         limit_f0_max = 1100
         enable_spk_id_cover = True
         #初始化一下各个ndarray
-        self.input_wav=np.zeros(int((1+buffer_num)*self.block_frame),dtype='float32')
+        self.input_wav=np.zeros(int((1+self.config.buffer_num)*self.block_frame),dtype='float32')
         self.output_wav=np.zeros(self.block_frame,dtype='float32')
         self.temp_wav=np.zeros(self.block_frame+self.crossfade_frame,dtype='float32')
         self.crossfade_last=np.zeros(self.crossfade_frame,dtype='float32')
         self.fade_in_window = np.linspace(0, 1,self.crossfade_frame)
         self.fade_out_window = np.linspace(1, 0,self.crossfade_frame)
-        self.svc_model = SvcDDSP(checkpoint_path, self.use_vocoder_based_enhancer, enhancer_adaptive_key, select_pitch_extractor,limit_f0_min, limit_f0_max, threhold, self.spk_id, self.spk_mix_dict, enable_spk_id_cover)
+        self.svc_model = SvcDDSP(self.config.checkpoint_path, self.config.use_vocoder_based_enhancer, enhancer_adaptive_key, self.config.select_pitch_extractor,limit_f0_min, limit_f0_max, self.config.threhold, self.config.spk_id, self.config.spk_mix_dict, enable_spk_id_cover)
         thread_vc=threading.Thread(target=self.soundinput)
         thread_vc.start()
         
@@ -231,23 +282,23 @@ class GUI:
         '''
         接受音频输入
         '''
-        with sd.Stream(callback=self.audio_callback, blocksize=self.block_frame,samplerate=self.samplerate,dtype='float32'):
+        with sd.Stream(callback=self.audio_callback, blocksize=self.block_frame,samplerate=self.config.samplerate,dtype='float32'):
             while self.flag_vc:
-                time.sleep(self.block_time)
+                time.sleep(self.config.block_time)
                 print('Audio block passed.')
         print('ENDing VC')
 
 
-    def audio_callback(self,indata,outdata, frames, time, status):
+    def audio_callback(self,indata:np.ndarray,outdata:np.ndarray, frames, time, status):
         '''
         音频处理
         '''
-        print("Realtime VCing...")
+        print("Starting inference")
         self.input_wav[:]=np.roll(self.input_wav,-self.block_frame)
         self.input_wav[-self.block_frame:]=librosa.to_mono(indata.T)
         print('input_wav.shape:'+str(self.input_wav.shape))
-        _audio, _model_sr = self.svc_model.infer( self.f_pitch_change, self.spk_id, self.f_safe_prefix_pad_length,self.input_wav,self.samplerate)
-        self.temp_wav[:] = librosa.resample(_audio, orig_sr=_model_sr, target_sr=self.samplerate)[-self.block_frame-self.crossfade_frame:]
+        _audio, _model_sr = self.svc_model.infer( self.config.f_pitch_change, self.config.spk_id, self.f_safe_prefix_pad_length,self.input_wav,self.config.samplerate)
+        self.temp_wav[:] = librosa.resample(_audio, orig_sr=_model_sr, target_sr=self.config.samplerate)[-self.block_frame-self.crossfade_frame:]
         #cross-fade output_wav's start with last crossfade
         self.output_wav[:]=self.temp_wav[:self.block_frame]
         self.output_wav[:self.crossfade_frame]*=self.fade_in_window
@@ -256,7 +307,7 @@ class GUI:
         self.crossfade_last[:]*=self.fade_out_window
         print("infered _audio.shape:"+str(_audio.shape))
         outdata[:] = np.array([self.output_wav, self.output_wav]).T
-        print('Outputed.')
+        print('Finished inference.')
 
     
     def get_devices(self,update: bool = True):
