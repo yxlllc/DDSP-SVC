@@ -1,4 +1,4 @@
-Language: [English](./README.md) ** 简体中文 **
+Language: [English](./README.md) **简体中文**
 # DDSP-SVC
 <div align="center">
 <img src="https://storage.googleapis.com/ddsp/github_images/ddsp_logo.png" width="200px" alt="logo"></img>
@@ -30,24 +30,28 @@ pip install -r requirements.txt
 注： 仅在 python 3.8 (windows) + pytorch 1.9.1 + torchaudio 0.6.0 测试过代码，太旧或太新的依赖可能会报错。
 ## 2. 配置预训练模型
 - **(必要操作)** 下载预训练 [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) 编码器并将其放到 `pretrain/hubert` 文件夹。
- - 更新：现在支持 ContentVec 编码器了。你可以下载预训练 [ContentVec](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) 编码器替代 HubertSoft 编码器并修改配置文件以使用它。
--  从 [DiffSinger 社区声码器项目](https://openvpi.github.io/vocoders) 下载基于预训练声码器的增强器，并解压至 `pretrain/` 文件夹。
- - 注意：你应当下载名称中带有`nsf_hifigan`的压缩文件，而非`nsf_hifigan_finetune`。
+  - 更新：现在支持 ContentVec 编码器了。你可以下载预训练 [ContentVec](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) 编码器替代 HubertSoft 编码器并修改配置文件以使用它。
+- 从 [DiffSinger 社区声码器项目](https://openvpi.github.io/vocoders) 下载基于预训练声码器的增强器，并解压至 `pretrain/` 文件夹。
+  -  注意：你应当下载名称中带有`nsf_hifigan`的压缩文件，而非`nsf_hifigan_finetune`。
 ## 3. 预处理
 
 ### 1. 配置训练数据集和验证数据集
-1. 手动配置：
+
+#### 1.1 手动配置：
+
 将所有的训练集数据 (.wav 格式音频切片) 放到 `data/train/audio`。
 
 将所有的验证集数据 (.wav 格式音频切片) 放到 `data/val/audio`。
 
-2. 程序随机选择（**多人物时不可使用**）：
+#### 1.2 程序随机选择（**多人物时不可使用**）：
+
 运行`python draw.py`,程序将帮助你挑选验证集数据（可以调整 `draw.py` 中的参数修改抽取文件的数量等参数）。
 
-3.文件夹结构目录展示：
- 3.1 单人物目录结构：
-  ```
- data
+#### 1.3文件夹结构目录展示：
+- 单人物目录结构：
+
+```
+data
 ├─ train
 │    ├─ audio
 │    │    ├─ aaa.wav
@@ -58,9 +62,10 @@ pip install -r requirements.txt
 │    │    ├─ fff.wav
 │    │    └─ ....wav
  ```
- 3.2 多人物目录结构：
- ```
- data
+- 多人物目录结构：
+
+```
+data
 ├─ train
 │    ├─ audio
 │    │    ├─ 1
@@ -82,7 +87,7 @@ pip install -r requirements.txt
 │    │    │   ├─ hhh.wav
 │    │    │   └─ ....wav
 │    │    └─ ...
- ```
+```
 ### 2. 样率合成器模型训练
 1. 训练基于梳齿波减法合成器的模型 (**推荐**)：
 
@@ -98,16 +103,16 @@ python preprocess.py -c configs/sins.yaml
 
 3. 您可以在预处理之前修改配置文件 `config/<model_name>.yaml`，默认配置适用于GTX-1660 显卡训练 44.1khz 高采样率合成器。
 
-4. 备注：
- 4.1: 请保持所有音频切片的采样率与 yaml 配置文件中的采样率一致！如果不一致，程序可以跑，但训练过程中的重新采样将非常缓慢。（可选：使用Adobe Audition™的响度匹配功能可以一次性完成重采样修改声道和响度匹配。）
+### 3. 备注：
+1. 请保持所有音频切片的采样率与 yaml 配置文件中的采样率一致！如果不一致，程序可以跑，但训练过程中的重新采样将非常缓慢。（可选：使用Adobe Audition™的响度匹配功能可以一次性完成重采样修改声道和响度匹配。）
 
- 4.2：训练数据集的音频切片总数建议为约 1000 个，另外长音频切成小段可以加快训练速度，但所有音频切片的时长不应少于 2 秒。如果音频切片太多，则需要较大的内存，配置文件中将 `cache_all_data` 选项设置为 false 可以解决此问题。
+2. 训练数据集的音频切片总数建议为约 1000 个，另外长音频切成小段可以加快训练速度，但所有音频切片的时长不应少于 2 秒。如果音频切片太多，则需要较大的内存，配置文件中将 `cache_all_data` 选项设置为 false 可以解决此问题。
 
- 4.3：验证集的音频切片总数建议为 10 个左右，不要放太多，不然验证过程会很慢。
+3. 验证集的音频切片总数建议为 10 个左右，不要放太多，不然验证过程会很慢。
 
- 4.4：如果您的数据集质量不是很高，请在配置文件中将 'f0_extractor' 设为 'crepe'。crepe 算法的抗噪性最好，但代价是会极大增加数据预处理所需的时间。
+4. 如果您的数据集质量不是很高，请在配置文件中将 'f0_extractor' 设为 'crepe'。crepe 算法的抗噪性最好，但代价是会极大增加数据预处理所需的时间。
 
- 4.5：配置文件中的 ‘n_spk’ 参数将控制是否训练多说话人模型。如果您要训练**多说话人**模型，为了对说话人进行编号，所有音频文件夹的名称必须是**不大于 ‘n_spk’ 的正整数**。
+5. 配置文件中的 ‘n_spk’ 参数将控制是否训练多说话人模型。如果您要训练**多说话人**模型，为了对说话人进行编号，所有音频文件夹的名称必须是**不大于 ‘n_spk’ 的正整数**。
 ## 4. 训练
 
 ### 1. 不使用预训练数据进行训练：
@@ -115,11 +120,11 @@ python preprocess.py -c configs/sins.yaml
 # 以训练 combsub 模型为例 
 python train.py -c configs/combsub.yaml
 ```
-训练其他模型方法类似。
+1. 训练其他模型方法类似。
 
-您可以随时中止训练，然后运行相同的命令来继续训练。
+2. 可以随时中止训练，然后运行相同的命令来继续训练。
 
-您也可以在中止训练后，重新预处理新数据集或更改训练参数（batchsize、lr等），然后运行相同的命令，就可以对模型进行微调 (finetune)。
+3. 微调 (finetune)：在中止训练后，重新预处理新数据集或更改训练参数（batchsize、lr等），然后运行相同的命令。
 ### 2. 使用预训练数据（底模）进行训练：
 1. **使用预训练模型请修改配置文件中的 'n_spk' 参数为 '2' ,同时配置`train`目录结构为多人物目录，不论你是否训练多说话人模型。**
 2. **如果你要训练一个更多说话人的模型，就不要下载预训练模型了。**
@@ -151,7 +156,7 @@ python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (
 ```bash
 python main.py -h
 ```
-4.如果要使用混合说话人（捏音色）功能，增添 “-mix” 选项来设计音色，下面是个例子：
+4. 如果要使用混合说话人（捏音色）功能，增添 “-mix” 选项来设计音色，下面是个例子：
 ```bash
 # 将1号说话人和2号说话人的音色按照0.5:0.5的比例混合
 python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -e true -eak 0
