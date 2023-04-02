@@ -57,7 +57,7 @@ data
 │    │    ├─ aaa.wav
 │    │    ├─ bbb.wav
 │    │    └─ ....wav
-│    └─ volume
+│    └─ val
 │    │    ├─ eee.wav
 │    │    ├─ fff.wav
 │    │    └─ ....wav
@@ -77,7 +77,7 @@ data
 │    │    │   ├─ ddd.wav
 │    │    │   └─ ....wav
 │    │    └─ ...
-│    └─ volume
+│    └─ val
 │    │    ├─ 1
 │    │    │   ├─ eee.wav
 │    │    │   ├─ fff.wav
