@@ -13,6 +13,9 @@ from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from torchaudio.transforms import Resample
 from .unit2control import Unit2Control
 from .core import frequency_filter, upsample, remove_above_fmax, MaskedAvgPool1d, MedianPool1d
+import time
+
+CREPE_RESAMPLE_KERNEL = {}
 
 class F0_Extractor:
     def __init__(self, f0_extractor, sample_rate = 44100, hop_size = 512, f0_min = 65, f0_max = 800):
@@ -21,7 +24,12 @@ class F0_Extractor:
         self.hop_size = hop_size
         self.f0_min = f0_min
         self.f0_max = f0_max
-    
+        if f0_extractor == 'crepe':
+            key_str = str(sample_rate)
+            if key_str not in CREPE_RESAMPLE_KERNEL:
+                CREPE_RESAMPLE_KERNEL[key_str] = Resample(sample_rate, 16000, lowpass_filter_width = 128)
+            self.resample_kernel = CREPE_RESAMPLE_KERNEL[key_str]
+                
     def extract(self, audio, uv_interp = False, device = None, silence_front = 0): # audio: 1d numpy array
         # extractor start time
         n_frames = int(len(audio) // self.hop_size) + 1
@@ -66,11 +74,10 @@ class F0_Extractor:
         elif self.f0_extractor == 'crepe':
             if device is None:
                 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-            wav16k = resampy.resample(audio, self.sample_rate, 16000)
-            wav16k_torch = torch.FloatTensor(wav16k).unsqueeze(0).to(device)
-               
+            resample_kernel = self.resample_kernel.to(device)
+            wav16k_torch = resample_kernel(torch.FloatTensor(audio).unsqueeze(0).to(device))
+            
             f0, pd = torchcrepe.predict(wav16k_torch, 16000, 80, self.f0_min, self.f0_max, pad=True, model='full', batch_size=512, device=device, return_periodicity=True)
-    
             pd = MedianPool1d(pd, 4)
             f0 = torchcrepe.threshold.At(0.05)(f0, pd)
             f0 = MaskedAvgPool1d(f0, 4)
