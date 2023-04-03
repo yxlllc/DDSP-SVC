@@ -12,7 +12,7 @@ from encoder.hubert.model import HubertSoft
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from torchaudio.transforms import Resample
 from .unit2control import Unit2Control
-from .core import frequency_filter, upsample, remove_above_fmax
+from .core import frequency_filter, upsample, remove_above_fmax, MaskedAvgPool1d, MedianPool1d
 
 class F0_Extractor:
     def __init__(self, f0_extractor, sample_rate = 44100, hop_size = 512, f0_min = 65, f0_max = 800):
@@ -70,12 +70,10 @@ class F0_Extractor:
             wav16k_torch = torch.FloatTensor(wav16k).unsqueeze(0).to(device)
                
             f0, pd = torchcrepe.predict(wav16k_torch, 16000, 80, self.f0_min, self.f0_max, pad=True, model='full', batch_size=512, device=device, return_periodicity=True)
-
-            pd = torchcrepe.filter.median(pd, 4)
-            pd = torchcrepe.threshold.Silence(-60.)(pd, wav16k_torch, 16000, 80)
+    
+            pd = MedianPool1d(pd, 4)
             f0 = torchcrepe.threshold.At(0.05)(f0, pd)
-            f0 = torchcrepe.filter.mean(f0, 4)
-            f0 = torch.where(torch.isnan(f0), torch.full_like(f0, 0), f0)
+            f0 = MaskedAvgPool1d(f0, 4)
             
             f0 = f0.squeeze(0).cpu().numpy()
             f0 = np.array([f0[int(min(int(np.round(n * self.hop_size / self.sample_rate / 0.005)), len(f0) - 1))] for n in range(n_frames - start_frame)])
