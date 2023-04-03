@@ -134,14 +134,11 @@ python main.py -h
 # Mix the timbre of 1st and 2nd speaker in a 0.5 to 0.5 ratio
 python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -eak 0
 ```
-## 7. HTTP Server and VST supported
-Start the server with the following command
+## 7. RealTime VC
+Start a simple GUI with the following command:
 ```bash
-# configs are in this python file, see the comments (Chinese only)
-python flask_api.py
+python gui.py
 ```
-Currently supported VST client:
-https://github.com/zhaohui8969/VST_NetProcess-
 
 ## 8. Acknowledgement
 * [ddsp](https://github.com/magenta/ddsp)

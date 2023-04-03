@@ -88,7 +88,7 @@ data
 │    │    │   └─ ....wav
 │    │    └─ ...
 ```
-### 2. 样率合成器模型训练
+### 2. 样例合成器模型训练
 1. 训练基于梳齿波减法合成器的模型 (**推荐**)：
 
 ```bash
@@ -161,15 +161,11 @@ python main.py -h
 # 将1号说话人和2号说话人的音色按照0.5:0.5的比例混合
 python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -e true -eak 0
 ```
-## 7. HTTP 服务器 和 VST 支持
-用以下命令启动服务器
+## 7. 实时变声
+用以下命令启动简易操作界面:
 ```bash
-# 配置在这个 python 文件里面，见注释
-python flask_api.py
+python gui.py
 ```
-当前支持的 VST 前端:
-https://github.com/zhaohui8969/VST_NetProcess-
-
 ## 8. 感谢
 * [ddsp](https://github.com/magenta/ddsp)
 * [pc-ddsp](https://github.com/yxlllc/pc-ddsp)
