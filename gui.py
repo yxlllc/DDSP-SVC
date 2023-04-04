@@ -5,10 +5,13 @@ from enhancer import Enhancer
 import numpy as np
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
 from ddsp.core import upsample
-
+import time
 
 class SvcDDSP:
-    def __init__(self, model_path, vocoder_based_enhancer, enhancer_adaptive_key, input_pitch_extractor,
+    def __init__(self) -> None:
+        pass
+    
+    def set_value(self, model_path, vocoder_based_enhancer, enhancer_adaptive_key, input_pitch_extractor,
                  f0_min, f0_max, threhold, spk_id, spk_mix_dict, enable_spk_id_cover):
         self.model_path = model_path
         self.vocoder_based_enhancer = vocoder_based_enhancer
@@ -136,13 +139,14 @@ class GUI:
         self.flag_vc:bool=False#变声线程flag
         self.block_frame=0
         self.crossfade_frame=0
-        self.svc_model:SvcDDSP = None
+        self.sola_search_frame=0
+        self.svc_model:SvcDDSP = SvcDDSP()
         self.fade_in_window:np.ndarray=None#crossfade计算用numpy数组
         self.fade_out_window:np.ndarray=None#crossfade计算用numpy数组
         self.input_wav:np.ndarray=None#输入音频规范化后的保存地址
         self.output_wav:np.ndarray=None#输出音频规范化后的保存地址
         self.temp_wav:np.ndarray=None#包含crossfade和输出音频的缓存区
-        self.crossfade_last:np.ndarray=None#保存上一个output的crossfade
+        self.sola_buffer:np.ndarray=None#保存上一个output的crossfade
         self.f0_mode_list=["parselmouth", "dio", "harvest", "crepe"]#F0预测器
         self.f_safe_prefix_pad_length:float = 1.0
         self.launcher()#start
@@ -175,18 +179,18 @@ class GUI:
                     [sg.Checkbox(text='启用捏音色功能',default=False,key='spk_mix'),sg.Button("设置混合音色",key='set_spk_mix')]
                 ],title='普通设置'),
                 sg.Frame(layout=[
-                    [sg.Text("音频切分大小"),sg.Slider(range=(0.1,3.0),orientation='h',key='block',resolution=0.05,default_value=0.5)],
-                    [sg.Text("交叉淡化时长"),sg.Slider(range=(0.02,0.1),orientation='h',key='crossfade',resolution=0.01)],
-                    [sg.Text("使用历史区块数量"),sg.Slider(range=(1,10),orientation='h',key='buffernum',resolution=1,default_value=2)],
+                    [sg.Text("音频切分大小"),sg.Slider(range=(0.05,3.0),orientation='h',key='block',resolution=0.05,default_value=0.5)],
+                    [sg.Text("交叉淡化时长"),sg.Slider(range=(0.01,0.15),orientation='h',key='crossfade',resolution=0.01,default_value=0.02)],
+                    [sg.Text("使用历史区块数量"),sg.Slider(range=(1,20),orientation='h',key='buffernum',resolution=1,default_value=2)],
                     [sg.Text("f0预测模式"),sg.Combo(values=self.f0_mode_list,key='f0_mode',default_value=self.f0_mode_list[2])],
                     [sg.Checkbox(text='启用增强器',default=True,key='use_enhancer')]
                 ],title='性能设置'),
             ],
-            [sg.Button("开始音频转换",key="start_vc"),sg.Button("停止音频转换",key="stop_vc")]
+            [sg.Button("开始音频转换",key="start_vc"),sg.Button("停止音频转换",key="stop_vc"),sg.Text('推理所用时间(ms):'),sg.Text('0',key='infer_time')]
         ]
 
         # 创造窗口
-        self.window = sg.Window('DDSP - GUI by INT16', layout)
+        self.window = sg.Window('DDSP - GUI', layout)
         self.event_handler()
 
 
@@ -240,7 +244,8 @@ class GUI:
             self.config.spk_mix_dict=None
         self.block_frame=int(self.config.block_time*self.config.samplerate)
         self.crossfade_frame=int(self.config.crossfade_time*self.config.samplerate)
-        self.f_safe_prefix_pad_length=self.config.block_time*(self.config.buffer_num)-self.config.crossfade_time*2
+        self.sola_search_frame=int((self.config.f_pitch_change+24)/4000 * self.config.samplerate)
+        self.f_safe_prefix_pad_length = self.config.block_time * self.config.buffer_num - self.config.crossfade_time - 0.01
 
     def update_values(self):
         self.window['sg_model'].update(self.config.checkpoint_path)
@@ -260,6 +265,7 @@ class GUI:
 
     def start_vc(self):
         '''开始音频转换'''
+        torch.cuda.empty_cache()
         self.flag_vc = True
         enhancer_adaptive_key = 0
         # f0范围限制(Hz)
@@ -269,11 +275,11 @@ class GUI:
         #初始化一下各个ndarray
         self.input_wav=np.zeros(int((1+self.config.buffer_num)*self.block_frame),dtype='float32')
         self.output_wav=np.zeros(self.block_frame,dtype='float32')
-        self.temp_wav=np.zeros(self.block_frame+self.crossfade_frame,dtype='float32')
-        self.crossfade_last=np.zeros(self.crossfade_frame,dtype='float32')
-        self.fade_in_window = np.linspace(0, 1,self.crossfade_frame)
-        self.fade_out_window = np.linspace(1, 0,self.crossfade_frame)
-        self.svc_model = SvcDDSP(self.config.checkpoint_path, self.config.use_vocoder_based_enhancer, enhancer_adaptive_key, self.config.select_pitch_extractor,limit_f0_min, limit_f0_max, self.config.threhold, self.config.spk_id, self.config.spk_mix_dict, enable_spk_id_cover)
+        self.temp_wav=np.zeros(self.block_frame+self.crossfade_frame+self.sola_search_frame,dtype='float32')
+        self.sola_buffer=np.zeros(self.crossfade_frame,dtype='float32')
+        self.fade_in_window = np.sin(np.pi * np.linspace(0, 1, self.crossfade_frame) / 2) ** 2
+        self.fade_out_window = 1 - self.fade_in_window
+        self.svc_model.set_value(self.config.checkpoint_path, self.config.use_vocoder_based_enhancer, enhancer_adaptive_key, self.config.select_pitch_extractor,limit_f0_min, limit_f0_max, self.config.threhold, self.config.spk_id, self.config.spk_mix_dict, enable_spk_id_cover)
         thread_vc=threading.Thread(target=self.soundinput)
         thread_vc.start()
         
@@ -289,25 +295,40 @@ class GUI:
         print('ENDing VC')
 
 
-    def audio_callback(self,indata:np.ndarray,outdata:np.ndarray, frames, time, status):
+    def audio_callback(self,indata:np.ndarray,outdata:np.ndarray, frames, times, status):
         '''
         音频处理
         '''
+        start_time=time.perf_counter()
         print("Starting inference")
         self.input_wav[:]=np.roll(self.input_wav,-self.block_frame)
         self.input_wav[-self.block_frame:]=librosa.to_mono(indata.T)
         print('input_wav.shape:'+str(self.input_wav.shape))
         _audio, _model_sr = self.svc_model.infer( self.config.f_pitch_change, self.config.spk_id, self.f_safe_prefix_pad_length,self.input_wav,self.config.samplerate)
-        self.temp_wav[:] = librosa.resample(_audio, orig_sr=_model_sr, target_sr=self.config.samplerate)[-self.block_frame-self.crossfade_frame:]
-        #cross-fade output_wav's start with last crossfade
-        self.output_wav[:]=self.temp_wav[:self.block_frame]
-        self.output_wav[:self.crossfade_frame]*=self.fade_in_window
-        self.output_wav[:self.crossfade_frame]+=self.crossfade_last
-        self.crossfade_last[:]=self.temp_wav[-self.crossfade_frame:]
-        self.crossfade_last[:]*=self.fade_out_window
+        if _model_sr==self.config.samplerate:
+            _audio = librosa.resample(_audio, orig_sr=_model_sr, target_sr=self.config.samplerate)
+        self.temp_wav[:] = _audio[- self.block_frame - self.crossfade_frame - self.sola_search_frame:]
+        #self.temp_wav[:] = self.input_wav[- self.block_frame - self.crossfade_frame - self.sola_search_frame:]
+        # sola shift
+        
+        cor_nom = np.convolve(self.temp_wav[ : self.crossfade_frame + self.sola_search_frame], np.flip(self.sola_buffer), 'valid')
+        cor_den = np.convolve(self.temp_wav[ : self.crossfade_frame + self.sola_search_frame] ** 2, np.ones(self.crossfade_frame), 'valid') + 1e-3
+        sola_shift = np.argmax( cor_nom / cor_den)
+        print('sola_shift: ' + str(sola_shift))
+        # crossfade
+        self.output_wav[:]=self.temp_wav[sola_shift : sola_shift + self.block_frame]
+        self.output_wav[:self.crossfade_frame] *= self.fade_in_window
+        self.output_wav[:self.crossfade_frame] += self.sola_buffer[:] * self.fade_out_window
+        
+        if sola_shift < self.sola_search_frame:
+            self.sola_buffer[:] = self.temp_wav[-self.sola_search_frame - self.crossfade_frame + sola_shift: -self.sola_search_frame + sola_shift]
+        else:
+            self.sola_buffer[:] = self.temp_wav[- self.crossfade_frame :]
+
         print("infered _audio.shape:"+str(_audio.shape))
         outdata[:] = np.array([self.output_wav, self.output_wav]).T
-        print('Finished inference.')
+        end_time=time.perf_counter()
+        self.window['infer_time'].update(int((end_time-start_time)*1000))
 
     
     def get_devices(self,update: bool = True):
