@@ -173,13 +173,13 @@ class GUI:
             ],
             [   sg.Frame(layout=[
                     [sg.Text("说话人id"),sg.Input(key='spk_id',default_text='1')],
-                    [sg.Text("响应阈值"),sg.Slider(range=(-60,0),orientation='h',key='noise',resolution=1,default_value=-35)],
+                    [sg.Text("响应阈值"),sg.Slider(range=(-60,0),orientation='h',key='noise',resolution=1,default_value=-40)],
                     [sg.Text("变调"),sg.Slider(range=(-24,24),orientation='h',key='pitch',resolution=1,default_value=12)],
                     [sg.Text("采样率"),sg.Input(key='samplerate',default_text='44100')],
                     [sg.Checkbox(text='启用捏音色功能',default=False,key='spk_mix'),sg.Button("设置混合音色",key='set_spk_mix')]
                 ],title='普通设置'),
                 sg.Frame(layout=[
-                    [sg.Text("音频切分大小"),sg.Slider(range=(0.05,3.0),orientation='h',key='block',resolution=0.05,default_value=0.5)],
+                    [sg.Text("音频切分大小"),sg.Slider(range=(0.05,3.0),orientation='h',key='block',resolution=0.01,default_value=0.5)],
                     [sg.Text("交叉淡化时长"),sg.Slider(range=(0.01,0.15),orientation='h',key='crossfade',resolution=0.01,default_value=0.02)],
                     [sg.Text("使用历史区块数量"),sg.Slider(range=(1,20),orientation='h',key='buffernum',resolution=1,default_value=2)],
                     [sg.Text("f0预测模式"),sg.Combo(values=self.f0_mode_list,key='f0_mode',default_value=self.f0_mode_list[2])],
@@ -244,7 +244,7 @@ class GUI:
             self.config.spk_mix_dict=None
         self.block_frame=int(self.config.block_time*self.config.samplerate)
         self.crossfade_frame=int(self.config.crossfade_time*self.config.samplerate)
-        self.sola_search_frame=int((self.config.f_pitch_change+24)/4000 * self.config.samplerate)
+        self.sola_search_frame=int(0.01 * self.config.samplerate)
         self.f_safe_prefix_pad_length = self.config.block_time * self.config.buffer_num - self.config.crossfade_time - 0.01
 
     def update_values(self):
