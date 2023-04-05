@@ -245,7 +245,8 @@ class GUI:
         self.block_frame=int(self.config.block_time*self.config.samplerate)
         self.crossfade_frame=int(self.config.crossfade_time*self.config.samplerate)
         self.sola_search_frame=int(0.01 * self.config.samplerate)
-        self.f_safe_prefix_pad_length = self.config.block_time * self.config.buffer_num - self.config.crossfade_time - 0.01
+        self.last_delay_frame=int(0.02 * self.config.samplerate)
+        self.f_safe_prefix_pad_length = self.config.block_time * self.config.buffer_num - self.config.crossfade_time - 0.01 - 0.02
 
     def update_values(self):
         self.window['sg_model'].update(self.config.checkpoint_path)
@@ -304,17 +305,20 @@ class GUI:
         self.input_wav[:]=np.roll(self.input_wav,-self.block_frame)
         self.input_wav[-self.block_frame:]=librosa.to_mono(indata.T)
         print('input_wav.shape:'+str(self.input_wav.shape))
-        _audio, _model_sr = self.svc_model.infer( self.config.f_pitch_change, self.config.spk_id, self.f_safe_prefix_pad_length,self.input_wav,self.config.samplerate)
-        if _model_sr==self.config.samplerate:
-            _audio = librosa.resample(_audio, orig_sr=_model_sr, target_sr=self.config.samplerate)
-        self.temp_wav[:] = _audio[- self.block_frame - self.crossfade_frame - self.sola_search_frame:]
-        #self.temp_wav[:] = self.input_wav[- self.block_frame - self.crossfade_frame - self.sola_search_frame:]
-        # sola shift
         
+        # infer
+        _audio, _model_sr = self.svc_model.infer( self.config.f_pitch_change, self.config.spk_id, self.f_safe_prefix_pad_length,self.input_wav,self.config.samplerate)
+        #_audio, _model_sr = self.input_wav, self.config.samplerate
+        if _model_sr != self.config.samplerate:
+            _audio = librosa.resample(_audio, orig_sr=_model_sr, target_sr=self.config.samplerate)
+        self.temp_wav[:] = _audio[- self.block_frame - self.crossfade_frame - self.sola_search_frame - self.last_delay_frame : - self.last_delay_frame]
+        
+        # sola shift
         cor_nom = np.convolve(self.temp_wav[ : self.crossfade_frame + self.sola_search_frame], np.flip(self.sola_buffer), 'valid')
         cor_den = np.convolve(self.temp_wav[ : self.crossfade_frame + self.sola_search_frame] ** 2, np.ones(self.crossfade_frame), 'valid') + 1e-3
         sola_shift = np.argmax( cor_nom / cor_den)
         print('sola_shift: ' + str(sola_shift))
+        
         # crossfade
         self.output_wav[:]=self.temp_wav[sola_shift : sola_shift + self.block_frame]
         self.output_wav[:self.crossfade_frame] *= self.fade_in_window
