@@ -3,12 +3,12 @@ Language: **English** [简体中文](./cn_README.md)
 <div align="center">
 <img src="https://storage.googleapis.com/ddsp/github_images/ddsp_logo.png" width="200px" alt="logo"></img>
 </div>
-End-to-end singing voice conversion system based on DDSP (Differentiable Digital Signal Processing）.
+Realtime end-to-end singing voice conversion system based on DDSP (Differentiable Digital Signal Processing）.
 
 ## 0. Introduction
 DDSP-SVC is a new open source singing voice conversion project dedicated to the development of free AI voice changer software that can be popularized on personal computers.
 
-Compared with the more famous [Diff-SVC](https://github.com/prophesier/diff-svc) and [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc),  its training and synthesis have much lower requirements for computer hardware, and the training time can be shortened by orders of magnitude.
+Compared with the more famous [Diff-SVC](https://github.com/prophesier/diff-svc) and [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc),  its training and synthesis have much lower requirements for computer hardware, and the training time can be shortened by orders of magnitude. In addition, when performing voice change in real-time, the hardware resources of this project are significantly lower than SO-VITS-SVC, and Diff-SVC is too slow to perform voice change in real-time.
 
 Although the original synthesis quality of DDSP is not ideal (the original output can be heard in tensorboard while training), after using the pre-trained vocoder-based enhancer, the sound quality for some dateset can reach a level close to SO-VITS-SVC.
 
@@ -93,7 +93,6 @@ data/val/audio/ccc.wav
 data/val/audio/ddd.wav
 ...
 ```
-
 ## 4. Training
 ```bash
 # train a combsub model as an example
@@ -113,7 +112,7 @@ tensorboard --logdir=exp
 Test audio samples will be visible in TensorBoard after the first validation.
 
 NOTE: The test audio samples in Tensorboard are the original outputs of your DDSP-SVC model that is not enhanced by an enhancer. If you want to test the synthetic effect after using the enhancer  (which may have higher quality) , please use the method described in the following chapter.
-## 6. Testing
+## 6. Non-real-time VC
 (**Recommend**) Enhance the output using the pretrained vocoder-based enhancer:
 ```bash
 # high audio quality in the normal vocal range if enhancer_adaptive_key = 0 (default)
@@ -134,12 +133,12 @@ python main.py -h
 # Mix the timbre of 1st and 2nd speaker in a 0.5 to 0.5 ratio
 python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -eak 0
 ```
-## 7. RealTime VC
+## 7. Real-time VC
 Start a simple GUI with the following command:
 ```bash
 python gui.py
 ```
-
+The front-end uses technologies such as sliding window, cross-fading, SOLA-based splicing and contextual semantic reference, which can achieve sound quality close to non-real-time synthesis with low latency and resource occupation.
 ## 8. Acknowledgement
 * [ddsp](https://github.com/magenta/ddsp)
 * [pc-ddsp](https://github.com/yxlllc/pc-ddsp)

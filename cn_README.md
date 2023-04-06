@@ -3,12 +3,12 @@ Language: [English](./README.md) **简体中文**
 <div align="center">
 <img src="https://storage.googleapis.com/ddsp/github_images/ddsp_logo.png" width="200px" alt="logo"></img>
 </div>
-基于 DDSP（可微分数字信号处理）的端到端歌声转换系统
+基于 DDSP（可微分数字信号处理）的实时端到端歌声转换系统
 
 ## 0.简介
 DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个人电脑上普及的自由 AI 变声器软件。
 
-相比于比较著名的 [Diff-SVC](https://github.com/prophesier/diff-svc) 和 [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc), 它训练和合成对电脑硬件的要求要低的多，并且训练时长有数量级的缩短。
+相比于比较著名的 [Diff-SVC](https://github.com/prophesier/diff-svc) 和 [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc), 它训练和合成对电脑硬件的要求要低的多，并且训练时长有数量级的缩短。另外在进行实时变声时，本项目的硬件资源显著低于 SO-VITS-SVC，而 Diff-SVC 合成太慢几乎无法进行实时变声。
 
 虽然 DDSP 的原始合成质量不是很理想（训练时在 tensorboard 中可以听到原始输出），但在使用基于预训练声码器的增强器增强音质后，对于部分数据集可以达到接近 SOVITS-SVC 的合成质量。
 
@@ -128,7 +128,7 @@ python train.py -c configs/combsub.yaml
 ### 2. 使用预训练数据（底模）进行训练：
 1. **使用预训练模型请修改配置文件中的 'n_spk' 参数为 '2' ,同时配置`train`目录结构为多人物目录，不论你是否训练多说话人模型。**
 2. **如果你要训练一个更多说话人的模型，就不要下载预训练模型了。**
-3. 欢迎PR训练的多人底模。
+3. 欢迎PR训练的多人底模 (请使用授权同意开源的数据集进行训练)。
 4. 从[**这里**](https://github.com/yxlllc/DDSP-SVC/releases/download/2.0/opencpop+kiritan.zip)下载预训练模型，并将`model_300000.pt`解压到`.\exp\combsub-test\`中
 5. 同不使用预训练数据进行训练一样，启动训练。
 ## 5. 可视化
@@ -139,7 +139,7 @@ tensorboard --logdir=exp
 第一次验证 (validation) 后，在 TensorBoard 中可以看到合成后的测试音频。
 
 注：TensorBoard 中的测试音频是 DDSP-SVC 模型的原始输出，并未通过增强器增强。 如果想测试模型使用增强器的合成效果（可能具有更高的合成质量），请使用下一章中描述的方法。
-## 6. 测试
+## 6. 非实时变声
 1. （**推荐**）使用预训练声码器增强 DDSP 的输出结果：
 ```bash
 # 默认 enhancer_adaptive_key = 0 正常音域范围内将有更高的音质
@@ -166,6 +166,7 @@ python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (
 ```bash
 python gui.py
 ```
+该前端使用了滑动窗口，交叉淡化，基于SOLA 的拼接和上下文语义参考等技术，在低延迟和资源占用的情况下可以达到接近非实时合成的音质。
 ## 8. 感谢
 * [ddsp](https://github.com/magenta/ddsp)
 * [pc-ddsp](https://github.com/yxlllc/pc-ddsp)
