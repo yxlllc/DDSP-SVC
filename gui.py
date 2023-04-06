@@ -3,6 +3,8 @@ import sounddevice as sd
 import torch,librosa,threading,time,pickle
 from enhancer import Enhancer
 import numpy as np
+from torch.nn import functional as F
+from torchaudio.transforms import Resample
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
 from ddsp.core import upsample
 import time
@@ -24,7 +26,6 @@ class SvcDDSP:
         self.spk_id = spk_id
         self.spk_mix_dict = spk_mix_dict
         self.enable_spk_id_cover = enable_spk_id_cover
-        
         # load ddsp model
         self.model, self.args = load_model(self.model_path, device=self.device)
         
@@ -98,7 +99,7 @@ class SvcDDSP:
             else:
                 output_sample_rate = self.args.data.sampling_rate
 
-            output = output.squeeze().cpu().numpy()
+            output = output.squeeze()
             return output, output_sample_rate
 
 
@@ -140,15 +141,16 @@ class GUI:
         self.block_frame=0
         self.crossfade_frame=0
         self.sola_search_frame=0
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.svc_model:SvcDDSP = SvcDDSP()
         self.fade_in_window:np.ndarray=None#crossfade计算用numpy数组
         self.fade_out_window:np.ndarray=None#crossfade计算用numpy数组
         self.input_wav:np.ndarray=None#输入音频规范化后的保存地址
         self.output_wav:np.ndarray=None#输出音频规范化后的保存地址
-        self.temp_wav:np.ndarray=None#包含crossfade和输出音频的缓存区
-        self.sola_buffer:np.ndarray=None#保存上一个output的crossfade
+        self.sola_buffer:torch.Tensor=None #保存上一个output的crossfade
         self.f0_mode_list=["parselmouth", "dio", "harvest", "crepe"]#F0预测器
-        self.f_safe_prefix_pad_length:float = 1.0
+        self.f_safe_prefix_pad_length:float = 0.0
+        self.resample_kernel = {}
         self.launcher()#start
 
 
@@ -159,7 +161,7 @@ class GUI:
         # 界面布局
         layout = [
             [   sg.Frame(layout=[
-                    [sg.Input(key='sg_model',default_text='exp\\model_chino.pt'),sg.FileBrowse('选择模型文件',key='choose_model')]
+                    [sg.Input(key='sg_model',default_text='exp\\multi_speaker\\model_300000.pt'),sg.FileBrowse('选择模型文件',key='choose_model')]
                 ],title='模型：.pt格式(自动识别同目录下config.yaml)'),
                 sg.Frame(layout=[
                     [sg.Text('选择配置文件所在目录'),sg.Input(key='config_file_dir',default_text='exp'),sg.FolderBrowse('打开文件夹',key='choose_config')],
@@ -173,15 +175,15 @@ class GUI:
             ],
             [   sg.Frame(layout=[
                     [sg.Text("说话人id"),sg.Input(key='spk_id',default_text='1')],
-                    [sg.Text("响应阈值"),sg.Slider(range=(-60,0),orientation='h',key='noise',resolution=1,default_value=-40)],
-                    [sg.Text("变调"),sg.Slider(range=(-24,24),orientation='h',key='pitch',resolution=1,default_value=12)],
+                    [sg.Text("响应阈值"),sg.Slider(range=(-60,0),orientation='h',key='noise',resolution=1,default_value=-45)],
+                    [sg.Text("变调"),sg.Slider(range=(-24,24),orientation='h',key='pitch',resolution=1,default_value=0)],
                     [sg.Text("采样率"),sg.Input(key='samplerate',default_text='44100')],
                     [sg.Checkbox(text='启用捏音色功能',default=False,key='spk_mix'),sg.Button("设置混合音色",key='set_spk_mix')]
                 ],title='普通设置'),
                 sg.Frame(layout=[
-                    [sg.Text("音频切分大小"),sg.Slider(range=(0.05,3.0),orientation='h',key='block',resolution=0.01,default_value=0.5)],
-                    [sg.Text("交叉淡化时长"),sg.Slider(range=(0.01,0.15),orientation='h',key='crossfade',resolution=0.01,default_value=0.02)],
-                    [sg.Text("使用历史区块数量"),sg.Slider(range=(1,20),orientation='h',key='buffernum',resolution=1,default_value=2)],
+                    [sg.Text("音频切分大小"),sg.Slider(range=(0.05,3.0),orientation='h',key='block',resolution=0.01,default_value=0.3)],
+                    [sg.Text("交叉淡化时长"),sg.Slider(range=(0.01,0.15),orientation='h',key='crossfade',resolution=0.01,default_value=0.04)],
+                    [sg.Text("使用历史区块数量"),sg.Slider(range=(1,20),orientation='h',key='buffernum',resolution=1,default_value=4)],
                     [sg.Text("f0预测模式"),sg.Combo(values=self.f0_mode_list,key='f0_mode',default_value=self.f0_mode_list[2])],
                     [sg.Checkbox(text='启用增强器',default=True,key='use_enhancer')]
                 ],title='性能设置'),
@@ -276,9 +278,8 @@ class GUI:
         #初始化一下各个ndarray
         self.input_wav=np.zeros(int((1+self.config.buffer_num)*self.block_frame),dtype='float32')
         self.output_wav=np.zeros(self.block_frame,dtype='float32')
-        self.temp_wav=np.zeros(self.block_frame+self.crossfade_frame+self.sola_search_frame,dtype='float32')
-        self.sola_buffer=np.zeros(self.crossfade_frame,dtype='float32')
-        self.fade_in_window = np.sin(np.pi * np.linspace(0, 1, self.crossfade_frame) / 2) ** 2
+        self.sola_buffer = torch.zeros(self.crossfade_frame, device=self.device)
+        self.fade_in_window = torch.sin(np.pi * torch.arange(0, 1, 1 / self.crossfade_frame, device=self.device) / 2) ** 2
         self.fade_out_window = 1 - self.fade_in_window
         self.svc_model.set_value(self.config.checkpoint_path, self.config.use_vocoder_based_enhancer, enhancer_adaptive_key, self.config.select_pitch_extractor,limit_f0_min, limit_f0_max, self.config.threhold, self.config.spk_id, self.config.spk_mix_dict, enable_spk_id_cover)
         thread_vc=threading.Thread(target=self.soundinput)
@@ -301,37 +302,46 @@ class GUI:
         音频处理
         '''
         start_time=time.perf_counter()
-        print("Starting inference")
+        print("\nStarting callback")
         self.input_wav[:]=np.roll(self.input_wav,-self.block_frame)
         self.input_wav[-self.block_frame:]=librosa.to_mono(indata.T)
-        print('input_wav.shape:'+str(self.input_wav.shape))
         
         # infer
         _audio, _model_sr = self.svc_model.infer( self.config.f_pitch_change, self.config.spk_id, self.f_safe_prefix_pad_length,self.input_wav,self.config.samplerate)
-        #_audio, _model_sr = self.input_wav, self.config.samplerate
+
+        # debug sola
+        '''
+        _audio, _model_sr = self.input_wav, self.config.samplerate
+        rs = int(np.random.uniform(-200,200))
+        print('debug_random_shift: ' + str(rs))
+        _audio = np.roll(_audio, rs)
+        _audio = torch.from_numpy(_audio).to(self.device)
+        '''
+        
         if _model_sr != self.config.samplerate:
-            _audio = librosa.resample(_audio, orig_sr=_model_sr, target_sr=self.config.samplerate)
-        self.temp_wav[:] = _audio[- self.block_frame - self.crossfade_frame - self.sola_search_frame - self.last_delay_frame : - self.last_delay_frame]
+            key_str = str(_model_sr) + '_' + str(self.config.samplerate)
+            if key_str not in self.resample_kernel:
+                self.resample_kernel[key_str] = Resample(_model_sr, self.config.samplerate, lowpass_filter_width = 128).to(self.device)
+            _audio = self.resample_kernel[key_str](_audio)
+        temp_wav = _audio[- self.block_frame - self.crossfade_frame - self.sola_search_frame - self.last_delay_frame : - self.last_delay_frame]
         
         # sola shift
-        cor_nom = np.convolve(self.temp_wav[ : self.crossfade_frame + self.sola_search_frame], np.flip(self.sola_buffer), 'valid')
-        cor_den = np.sqrt(np.convolve(self.temp_wav[ : self.crossfade_frame + self.sola_search_frame] ** 2, np.ones(self.crossfade_frame), 'valid') + 1e-3)
-        sola_shift = np.argmax( cor_nom / cor_den)
-        print('sola_shift: ' + str(sola_shift))
+        conv_input = temp_wav[None, None, : self.crossfade_frame + self.sola_search_frame]
+        cor_nom = F.conv1d(conv_input, self.sola_buffer[None, None, :])
+        cor_den = torch.sqrt(F.conv1d(conv_input ** 2, torch.ones(1, 1, self.crossfade_frame, device=self.device)) + 1e-8)
+        sola_shift = torch.argmax( cor_nom[0, 0] / cor_den[0, 0])
+        print('sola_shift: ' + str(int(sola_shift)))
         
         # crossfade
-        self.output_wav[:]=self.temp_wav[sola_shift : sola_shift + self.block_frame]
-        self.output_wav[:self.crossfade_frame] *= self.fade_in_window
-        self.output_wav[:self.crossfade_frame] += self.sola_buffer[:] * self.fade_out_window
+        temp_wav = temp_wav[sola_shift : sola_shift + self.block_frame + self.crossfade_frame]
+        temp_wav[ : self.crossfade_frame] *= self.fade_in_window
+        temp_wav[ : self.crossfade_frame] += self.sola_buffer * self.fade_out_window
         
-        if sola_shift < self.sola_search_frame:
-            self.sola_buffer[:] = self.temp_wav[-self.sola_search_frame - self.crossfade_frame + sola_shift: -self.sola_search_frame + sola_shift]
-        else:
-            self.sola_buffer[:] = self.temp_wav[- self.crossfade_frame :]
-
-        print("infered _audio.shape:"+str(_audio.shape))
-        outdata[:] = np.array([self.output_wav, self.output_wav]).T
+        self.sola_buffer = temp_wav[- self.crossfade_frame :]
+            
+        outdata[:] = temp_wav[ : - self.crossfade_frame, None].repeat(1,2).cpu().numpy()
         end_time=time.perf_counter()
+        print('infer_time: ' + str(end_time-start_time))
         self.window['infer_time'].update(int((end_time-start_time)*1000))
 
     
