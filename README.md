@@ -3,7 +3,7 @@ Language: **English** [简体中文](./cn_README.md)
 <div align="center">
 <img src="https://storage.googleapis.com/ddsp/github_images/ddsp_logo.png" width="200px" alt="logo"></img>
 </div>
-Realtime end-to-end singing voice conversion system based on DDSP (Differentiable Digital Signal Processing）.
+Real-time end-to-end singing voice conversion system based on DDSP (Differentiable Digital Signal Processing）.
 
 ## 0. Introduction
 DDSP-SVC is a new open source singing voice conversion project dedicated to the development of free AI voice changer software that can be popularized on personal computers.
