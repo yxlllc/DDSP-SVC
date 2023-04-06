@@ -315,7 +315,7 @@ class GUI:
         
         # sola shift
         cor_nom = np.convolve(self.temp_wav[ : self.crossfade_frame + self.sola_search_frame], np.flip(self.sola_buffer), 'valid')
-        cor_den = np.convolve(self.temp_wav[ : self.crossfade_frame + self.sola_search_frame] ** 2, np.ones(self.crossfade_frame), 'valid') + 1e-3
+        cor_den = np.sqrt(np.convolve(self.temp_wav[ : self.crossfade_frame + self.sola_search_frame] ** 2, np.ones(self.crossfade_frame), 'valid') + 1e-3)
         sola_shift = np.argmax( cor_nom / cor_den)
         print('sola_shift: ' + str(sola_shift))
         
