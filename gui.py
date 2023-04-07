@@ -234,8 +234,6 @@ class GUI:
                 print("enhancer:"+str(self.config.use_vocoder_based_enhancer))
                 print('using_cuda:'+str(torch.cuda.is_available()))
                 self.start_vc()
-            elif event=='stop_vc' and self.flag_vc==True:
-                self.flag_vc = False
             elif event=='spk_id':
                 self.config.spk_id=int(values['spk_id'])
             elif event=='threhold':
@@ -258,6 +256,9 @@ class GUI:
             elif event=='save_config' and self.flag_vc==False:
                 self.set_values(values)
                 self.config.save(values['config_file_dir'])
+            elif self.flag_vc==True:
+                self.flag_vc = False
+            
 
     def set_values(self, values):
         self.set_devices(values["sg_input_device"],values['sg_output_device'])
@@ -273,10 +274,11 @@ class GUI:
         self.config.select_pitch_extractor=values['f0_mode']
         self.config.use_vocoder_based_enhancer=values['use_enhancer']
         self.config.use_spk_mix=values['spk_mix']
-        self.block_frame=int(self.config.block_time*self.config.samplerate)
-        self.crossfade_frame=int(self.config.crossfade_time*self.config.samplerate)
+        self.block_frame=int(self.config.block_time * self.config.samplerate)
+        self.crossfade_frame=int(self.config.crossfade_time * self.config.samplerate)
         self.sola_search_frame=int(0.01 * self.config.samplerate)
         self.last_delay_frame=int(0.02 * self.config.samplerate)
+        self.input_frames = max(self.block_frame + self.crossfade_frame + self.sola_search_frame + 2 * self.last_delay_frame, (1 + self.config.buffer_num) * self.block_frame)
         self.f_safe_prefix_pad_length = self.config.block_time * self.config.buffer_num - self.config.crossfade_time - 0.01 - 0.02
 
     def update_values(self):
@@ -299,14 +301,7 @@ class GUI:
         '''开始音频转换'''
         torch.cuda.empty_cache()
         self.flag_vc = True
-        enhancer_adaptive_key = 0
-        # f0范围限制(Hz)
-        limit_f0_min = 50
-        limit_f0_max = 1100
-        enable_spk_id_cover = False
-        #初始化一下各个ndarray
-        self.input_wav=np.zeros(int((1+self.config.buffer_num)*self.block_frame),dtype='float32')
-        self.output_wav=np.zeros(self.block_frame,dtype='float32')
+        self.input_wav=np.zeros(self.input_frames, dtype='float32')
         self.sola_buffer = torch.zeros(self.crossfade_frame, device=self.device)
         self.fade_in_window = torch.sin(np.pi * torch.arange(0, 1, 1 / self.crossfade_frame, device=self.device) / 2) ** 2
         self.fade_out_window = 1 - self.fade_in_window
