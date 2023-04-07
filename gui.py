@@ -256,7 +256,7 @@ class GUI:
             elif event=='save_config' and self.flag_vc==False:
                 self.set_values(values)
                 self.config.save(values['config_file_dir'])
-            elif self.flag_vc==True:
+            elif event!='start_vc' and self.flag_vc==True:
                 self.flag_vc = False
             
 
