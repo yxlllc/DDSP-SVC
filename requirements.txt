@@ -21,3 +21,4 @@ tqdm
 wave
 pysimplegui
 sounddevice
+gradio
