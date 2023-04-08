@@ -35,7 +35,10 @@ class Enhancer:
         f0 = f0[: , start_frame :, :]
         
         # adaptive parameters
-        adaptive_factor = 2 ** ( -adaptive_key / 12)
+        if adaptive_key == 'auto':
+            adaptive_factor = float(min(760 / torch.max(f0), 1))
+        else:
+            adaptive_factor = 2 ** ( -adaptive_key / 12)    
         adaptive_sample_rate = 100 * int(np.round(self.enhancer_sample_rate / adaptive_factor / 100))
         real_factor = self.enhancer_sample_rate / adaptive_sample_rate
         

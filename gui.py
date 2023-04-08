@@ -53,7 +53,7 @@ class SvcDDSP:
                 use_spk_mix=False, 
                 spk_mix_dict=None,
                 use_enhancer=True,
-                enhancer_adaptive_key=0,
+                enhancer_adaptive_key='auto',
                 pitch_extractor_type='crepe', 
                 f0_min=50,
                 f0_max=1100,
