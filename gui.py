@@ -9,6 +9,24 @@ from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encod
 from ddsp.core import upsample
 import time
 
+def phase_vocoder(a, b, fade_out, fade_in):
+    fa = torch.fft.rfft(a)
+    fb = torch.fft.rfft(b)
+    absab = torch.abs(fa)+ torch.abs(fb)
+    n = a.shape[0]
+    if n % 2 == 0:
+        absab[1:-1] *= 2
+    else:
+        absab[1:] *= 2
+    phia = torch.angle(fa)
+    phib = torch.angle(fb)
+    deltaphase = phib - phia
+    deltaphase = deltaphase - 2 * np.pi * torch.floor(deltaphase / 2 / np.pi + 0.5)
+    w = 2 * np.pi * torch.arange(n // 2 + 1).to(a) + deltaphase
+    t = torch.arange(n).unsqueeze(-1).to(a) / n
+    result = a * (fade_out ** 2) + b * (fade_in ** 2) + torch.sum(absab * torch.cos(w * t + phia), -1) * fade_out * fade_in / n
+    return result
+    
 class SvcDDSP:
     def __init__(self) -> None:
         self.model = None
@@ -127,6 +145,7 @@ class Config:
         self.spk_id = 1# 默认说话人。
         self.spk_mix_dict = None # {1:0.5, 2:0.5} 表示1号说话人和2号说话人的音色按照0.5:0.5的比例混合
         self.use_vocoder_based_enhancer = True
+        self.use_phase_vocoder = True
         self.checkpoint_path=''
         self.threhold=-35
         self.buffer_num=2
@@ -201,7 +220,7 @@ class GUI:
                     [sg.Text("交叉淡化时长"),sg.Slider(range=(0.01,0.15),orientation='h',key='crossfade',resolution=0.01,default_value=0.04,enable_events=True)],
                     [sg.Text("使用历史区块数量"),sg.Slider(range=(1,20),orientation='h',key='buffernum',resolution=1,default_value=4,enable_events=True)],
                     [sg.Text("f0预测模式"),sg.Combo(values=self.f0_mode_list,key='f0_mode',default_value=self.f0_mode_list[2],enable_events=True)],
-                    [sg.Checkbox(text='启用增强器',default=True,key='use_enhancer',enable_events=True)]
+                    [sg.Checkbox(text='启用增强器',default=True,key='use_enhancer',enable_events=True), sg.Checkbox(text='启用相位声码器',default=False,key='use_phase_vocoder',enable_events=True)]
                 ],title='性能设置'),
             ],
             [sg.Button("开始音频转换",key="start_vc"),sg.Button("停止音频转换",key="stop_vc"),sg.Text('推理所用时间(ms):'),sg.Text('0',key='infer_time')]
@@ -250,6 +269,8 @@ class GUI:
                 self.config.select_pitch_extractor=values['f0_mode']
             elif event=='use_enhancer':
                 self.config.use_vocoder_based_enhancer=values['use_enhancer']
+            elif event=='use_phase_vocoder':
+                self.config.use_phase_vocoder=values['use_phase_vocoder']
             elif event=='load_config' and self.flag_vc==False:
                 if self.config.load(values['config_file_dir']):
                     self.update_values()
@@ -273,6 +294,7 @@ class GUI:
         self.config.buffer_num = int(values['buffernum'])
         self.config.select_pitch_extractor=values['f0_mode']
         self.config.use_vocoder_based_enhancer=values['use_enhancer']
+        self.config.use_phase_vocoder=values['use_phase_vocoder']
         self.config.use_spk_mix=values['spk_mix']
         self.block_frame=int(self.config.block_time * self.config.samplerate)
         self.crossfade_frame=int(self.config.crossfade_time * self.config.samplerate)
@@ -343,7 +365,7 @@ class GUI:
                                     pitch_extractor_type = self.config.select_pitch_extractor,
                                     safe_prefix_pad_length = self.f_safe_prefix_pad_length,
                                 )
-
+        
         # debug sola
         '''
         _audio, _model_sr = self.input_wav, self.config.samplerate
@@ -365,12 +387,19 @@ class GUI:
         cor_nom = F.conv1d(conv_input, self.sola_buffer[None, None, :])
         cor_den = torch.sqrt(F.conv1d(conv_input ** 2, torch.ones(1, 1, self.crossfade_frame, device=self.device)) + 1e-8)
         sola_shift = torch.argmax( cor_nom[0, 0] / cor_den[0, 0])
+        temp_wav = temp_wav[sola_shift : sola_shift + self.block_frame + self.crossfade_frame]
         print('sola_shift: ' + str(int(sola_shift)))
         
-        # crossfade
-        temp_wav = temp_wav[sola_shift : sola_shift + self.block_frame + self.crossfade_frame]
-        temp_wav[ : self.crossfade_frame] *= self.fade_in_window
-        temp_wav[ : self.crossfade_frame] += self.sola_buffer * self.fade_out_window
+        # phase vocoder
+        if self.config.use_phase_vocoder:
+            temp_wav[ : self.crossfade_frame] = phase_vocoder(
+                                                    self.sola_buffer, 
+                                                    temp_wav[ : self.crossfade_frame],
+                                                    self.fade_out_window,
+                                                    self.fade_in_window)
+        else:
+            temp_wav[ : self.crossfade_frame] *= self.fade_in_window
+            temp_wav[ : self.crossfade_frame] += self.sola_buffer * self.fade_out_window
         
         self.sola_buffer = temp_wav[- self.crossfade_frame :]
             
