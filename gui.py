@@ -470,5 +470,5 @@ class GUI:
 
 
 if __name__ == "__main__":
-    i18n = gui_locale.I18nAuto('en_US')
+    i18n = gui_locale.I18nAuto()
     gui = GUI()
