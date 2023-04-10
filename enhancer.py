@@ -36,9 +36,11 @@ class Enhancer:
         
         # adaptive parameters
         if adaptive_key == 'auto':
-            adaptive_factor = float(min(760 / torch.max(f0), 1))
-        else:
-            adaptive_factor = 2 ** ( -adaptive_key / 12)    
+            adaptive_key = 12 * np.log2(float(torch.max(f0) / 760))
+            adaptive_key = max(0, np.ceil(adaptive_key))
+            print('auto_adaptive_key: ' + str(int(adaptive_key)))
+            
+        adaptive_factor = 2 ** ( -adaptive_key / 12)    
         adaptive_sample_rate = 100 * int(np.round(self.enhancer_sample_rate / adaptive_factor / 100))
         real_factor = self.enhancer_sample_rate / adaptive_sample_rate
         
@@ -104,5 +106,5 @@ class NsfHifiGAN(torch.nn.Module):
                 self.h.fmax)
         with torch.no_grad():
             mel = stft.get_mel(audio)
-            enhanced_audio = self.model(mel, f0[:,:mel.size(-1)]).view(-1)
+            enhanced_audio = self.model(mel, f0[:,:mel.size(-1)])
             return enhanced_audio, self.h.sampling_rate

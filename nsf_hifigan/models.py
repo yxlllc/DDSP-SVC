@@ -165,12 +165,7 @@ class SineGen(torch.nn.Module):
         else:
             sine_waves = sine_waves.float()
         sine_waves = sine_waves * self.sine_amp
-        uv = self._f02uv(f0)
-        uv = F.interpolate(uv.transpose(2, 1), scale_factor=upp, mode='nearest').transpose(2, 1)
-        noise_amp = uv * self.noise_std + (1 - uv) * self.sine_amp / 3
-        noise = noise_amp * torch.randn_like(sine_waves)
-        sine_waves = sine_waves * uv + noise
-        return sine_waves, uv, noise
+        return sine_waves
 
 
 class SourceModuleHnNSF(torch.nn.Module):
@@ -207,7 +202,7 @@ class SourceModuleHnNSF(torch.nn.Module):
         self.l_tanh = torch.nn.Tanh()
 
     def forward(self, x, upp):
-        sine_wavs, uv, _ = self.l_sin_gen(x, upp)
+        sine_wavs = self.l_sin_gen(x, upp)
         sine_merge = self.l_tanh(self.l_linear(sine_wavs))
         return sine_merge
 
