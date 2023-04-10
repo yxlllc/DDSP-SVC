@@ -3,7 +3,7 @@ import locale
 本地化方式如下所示
 '''
 
-LANGUAGE_LIST = ['en_US', 'en_US']
+LANGUAGE_LIST = ['zh_CN', 'en_US']
 LANGUAGE_ALL = {
     'zh_CN': {
         'SUPER': 'END',
