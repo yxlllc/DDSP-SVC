@@ -167,6 +167,8 @@ python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (
 python gui.py
 ```
 该前端使用了滑动窗口，交叉淡化，基于SOLA 的拼接和上下文语义参考等技术，在低延迟和资源占用的情况下可以达到接近非实时合成的音质。
+
+更新：现在加入了基于相位声码器的衔接算法，但是大多数情况下 SOLA 算法已经具有足够高的拼接音质，所以它默认是关闭状态。如果您追求极端的低延迟实时变声音质，可以考虑开启它并仔细调参，有概率音质更高。但大量测试发现，如果交叉淡化时长大于0.1秒，相位声码器反而会造成音质明显劣化。
 ## 8. 感谢
 * [ddsp](https://github.com/magenta/ddsp)
 * [pc-ddsp](https://github.com/yxlllc/pc-ddsp)
