@@ -41,38 +41,37 @@ def split_data(src_dir, dst_dir, ratio):
             files.append(item)
 
     # 如果源目录下没有任何wav文件，则报错并退出函数
-    if len(files) == 0:
+    if len(files) > 0:
+        # 计算需要抽取的wav文件数量
+        num_files = int(len(files) * ratio)
+        num_files = max(SAMPLE_MIN, min(SAMPLE_MAX, num_files))
+
+        # 随机打乱文件名列表，并取出前num_files个作为抽取结果
+        np.random.shuffle(files)
+        selected_files = files[:num_files]
+
+        # 创建一个进度条对象，用于显示程序的运行进度
+        pbar = tqdm.tqdm(total=num_files)
+
+        # 遍历抽取结果中的每个文件名
+        for file in selected_files:
+            # 拼接源文件和目标文件的完整路径
+            src_file = os.path.join(src_dir, file)
+            dst_file = os.path.join(dst_dir, file)
+            # 检查源文件的时长是否大于2秒
+            if check_duration(src_file):
+                # 如果是，则剪切源文件到目标目录中
+                shutil.move(src_file, dst_file)
+                # 更新进度条
+                pbar.update(1)
+            else:
+                # 如果不是，则打印源文件的文件名，并跳过该文件
+                print(f"Skipped {src_file} because its duration is less than 2 seconds.")
+        
+        # 关闭进度条
+        pbar.close()
+    else:
         print(f"Error: No wav files found in {src_dir}")
-        return
-    
-    # 计算需要抽取的wav文件数量
-    num_files = int(len(files) * ratio)
-    num_files = max(SAMPLE_MIN, min(SAMPLE_MAX, num_files))
-
-    # 随机打乱文件名列表，并取出前num_files个作为抽取结果
-    np.random.shuffle(files)
-    selected_files = files[:num_files]
-
-    # 创建一个进度条对象，用于显示程序的运行进度
-    pbar = tqdm.tqdm(total=num_files)
-
-    # 遍历抽取结果中的每个文件名
-    for file in selected_files:
-        # 拼接源文件和目标文件的完整路径
-        src_file = os.path.join(src_dir, file)
-        dst_file = os.path.join(dst_dir, file)
-        # 检查源文件的时长是否大于2秒
-        if check_duration(src_file):
-            # 如果是，则剪切源文件到目标目录中
-            shutil.move(src_file, dst_file)
-            # 更新进度条
-            pbar.update(1)
-        else:
-            # 如果不是，则打印源文件的文件名，并跳过该文件
-            print(f"Skipped {src_file} because its duration is less than 2 seconds.")
-    
-    # 关闭进度条
-    pbar.close()
 
     # 遍历源目录下所有的子目录（如果有）
     for subdir in subdirs:
