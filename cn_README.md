@@ -43,7 +43,7 @@ pip install -r requirements.txt
 
 将所有的验证集数据 (.wav 格式音频切片) 放到 `data/val/audio`。
 
-#### 1.2 程序随机选择（**多人物时不可使用**）：
+#### 1.2 程序随机选择：
 
 运行`python draw.py`,程序将帮助你挑选验证集数据（可以调整 `draw.py` 中的参数修改抽取文件的数量等参数）。
 
