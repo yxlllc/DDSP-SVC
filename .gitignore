@@ -1,1 +1,6 @@
 __pycache__/
+
+venv/
+results/
+configs/
+!configs/combsub.yaml
