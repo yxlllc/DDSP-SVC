@@ -228,7 +228,7 @@ if __name__ == '__main__':
                                                             args.data.sampling_rate, 
                                                             seg_f0, 
                                                             args.data.block_size, 
-                                                            adaptive_key = float(cmd.enhancer_adaptive_key))
+                                                            adaptive_key = cmd.enhancer_adaptive_key)
             else:
                 output_sample_rate = args.data.sampling_rate
             

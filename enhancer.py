@@ -39,7 +39,9 @@ class Enhancer:
             adaptive_key = 12 * np.log2(float(torch.max(f0) / 760))
             adaptive_key = max(0, np.ceil(adaptive_key))
             print('auto_adaptive_key: ' + str(int(adaptive_key)))
-            
+        else:
+            adaptive_key = float(adaptive_key)
+        
         adaptive_factor = 2 ** ( -adaptive_key / 12)    
         adaptive_sample_rate = 100 * int(np.round(self.enhancer_sample_rate / adaptive_factor / 100))
         real_factor = self.enhancer_sample_rate / adaptive_sample_rate
