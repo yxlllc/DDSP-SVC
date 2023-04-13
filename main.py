@@ -6,6 +6,7 @@ import numpy as np
 import soundfile as sf
 import pyworld as pw
 import parselmouth
+import hashlib
 from ast import literal_eval
 from slicer import Slicer
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
@@ -157,18 +158,39 @@ if __name__ == '__main__':
         audio = librosa.to_mono(audio)
     hop_size = args.data.block_size * sample_rate / args.data.sampling_rate
     
-    # extract f0
-    print('Pitch extractor type: ' + cmd.pitch_extractor)
-    pitch_extractor = F0_Extractor(
-                        cmd.pitch_extractor, 
-                        sample_rate, 
-                        hop_size, 
-                        float(cmd.f0_min), 
-                        float(cmd.f0_max))
-    print('Extracting the pitch curve of the input audio...')
-    f0 = pitch_extractor.extract(audio, uv_interp = True, device = device)
+    # get MD5 hash from wav file
+    md5_hash = ""
+    with open(cmd.input, 'rb') as f:
+        data = f.read()
+        md5_hash = hashlib.md5(data).hexdigest()
+        print("MD5: " + md5_hash)
+    
+    cache_dir_path = os.path.join(os.path.dirname(__file__), "cache")
+    cache_file_path = os.path.join(cache_dir_path, f"{cmd.pitch_extractor}_{md5_hash}.npy")
+    
+    is_cache_available = os.path.exists(cache_file_path)
+    if is_cache_available:
+        # f0 cache load
+        print('Loading pitch curves for input audio from cache directory...')
+        f0 = np.load(cache_file_path, allow_pickle=False)
+    else:
+        # extract f0
+        print('Pitch extractor type: ' + cmd.pitch_extractor)
+        pitch_extractor = F0_Extractor(
+                            cmd.pitch_extractor, 
+                            sample_rate, 
+                            hop_size, 
+                            float(cmd.f0_min), 
+                            float(cmd.f0_max))
+        print('Extracting the pitch curve of the input audio...')
+        f0 = pitch_extractor.extract(audio, uv_interp = True, device = device)
+        
+        # f0 cache save
+        os.makedirs(cache_dir_path, exist_ok=True)
+        np.save(cache_file_path, f0, allow_pickle=False)
+    
     f0 = torch.from_numpy(f0).float().to(device).unsqueeze(-1).unsqueeze(0)
-   
+    
     # key change
     f0 = f0 * 2 ** (float(cmd.key) / 12)
     
