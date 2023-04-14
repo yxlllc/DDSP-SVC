@@ -27,7 +27,9 @@ DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个�
 ```bash
 pip install -r requirements.txt 
 ```
-注： 仅在 python 3.8 (windows) + pytorch 1.9.1 + torchaudio 0.6.0 测试过代码，太旧或太新的依赖可能会报错。
+注： 仅在 python 3.8 (windows) + torch 1.9.1 + torchaudio 0.6.0 测试过代码，太旧或太新的依赖可能会报错。
+
+更新：python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 可以运行，训练速度更快了。
 ## 2. 配置预训练模型
 - **(必要操作)** 下载预训练 [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) 编码器并将其放到 `pretrain/hubert` 文件夹。
   - 更新：现在支持 ContentVec 编码器了。你可以下载预训练 [ContentVec](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) 编码器替代 HubertSoft 编码器并修改配置文件以使用它。
