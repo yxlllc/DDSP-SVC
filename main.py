@@ -166,7 +166,7 @@ if __name__ == '__main__':
         print("MD5: " + md5_hash)
     
     cache_dir_path = os.path.join(os.path.dirname(__file__), "cache")
-    cache_file_path = os.path.join(cache_dir_path, f"{cmd.pitch_extractor}_{md5_hash}.npy")
+    cache_file_path = os.path.join(cache_dir_path, f"{cmd.pitch_extractor}_{cmd.f0_min}_{cmd.f0_max}_{md5_hash}.npy")
     
     is_cache_available = os.path.exists(cache_file_path)
     if is_cache_available:
@@ -227,6 +227,7 @@ if __name__ == '__main__':
     else:
         print('Speaker ID: '+ str(int(cmd.spk_id)))        
     spk_id = torch.LongTensor(np.array([[int(cmd.spk_id)]])).to(device)
+    
     # forward and save the output
     result = np.zeros(0)
     current_length = 0
