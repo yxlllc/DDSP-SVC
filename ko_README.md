@@ -11,7 +11,7 @@ DDSP-SVC는 새로운 오픈 소스 노래 음성 변환 프로젝트이며 개�
 
 이 프로젝트보다 더 유명한 [Diff-SVC](https://github.com/prophesier/diff-svc)와 [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc)랑 비교해보았을때, 훈련과 합성 과정에서 조금 더 낮은 컴퓨터 사양에서도 동작하고 훈련 시간도 몇 배 더 단축 할 수 있습니다. 또한 실시간으로 음성을 변경 할 때 SO-VITS-SVC에서 요구하는 하드웨어 자원보다 요구 기준이 낮으며 Diff-SVC의 경우 실시간 음성 변경이 너무 느립니다.
 
-본래 DDSP 의 합성 품질이 그닥 이상적이지는 않지만 (훈련 중에 Tensorboard에서 본래의 출력을 들을 수 있음) 사전훈련된 보코더 기반 enhancer를 사용하여 몇몇 데이터셋이 SO-VITS-SVC의 음질과 비슷한 수준으로 도달 할 수 있습니다.
+본래 DDSP 의 합성 품질이 그닥 이상적이지는 않지만 (훈련 중에 TensorBoard에서 본래의 출력을 들을 수 있음) 사전훈련된 보코더 기반 enhancer를 사용하여 몇몇 데이터셋이 SO-VITS-SVC의 음질과 비슷한 수준으로 도달 할 수 있습니다.
 
 학습 데이터의 품질이 매우 높은 경우에도 Diff-SVC의 음질이 가장 좋을 수 있습니다. 데모 출력 결과는 `samples` 폴더에 존재하며 관련된 체크포인트 모델들은 Releases 페이지에서 다운로드 하실 수 있습니다.
 
