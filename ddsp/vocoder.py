@@ -133,6 +133,9 @@ class Units_Encoder:
         if encoder == 'contentvec768':
             self.model = Audio2ContentVec768(encoder_ckpt, device=device)
             is_loaded_encoder = True
+        if encoder == 'contentvec768l12':
+            self.model = Audio2ContentVec768L12(encoder_ckpt, device=device)
+            is_loaded_encoder = True
         if not is_loaded_encoder:
             raise ValueError(f" [x] Unknown units encoder: {encoder}")
             

@@ -5,10 +5,10 @@ data:
   sampling_rate: 44100
   block_size: 512 # Equal to hop_length
   duration: 2 # Audio duration during training, must be less than the duration of the shortest audio clip
-  encoder: 'hubertsoft' # 'hubertsoft', 'hubertbase', 'hubertbase768', 'contentvec' or 'contentvec768'
+  encoder: 'hubertsoft' # 'hubertsoft', 'hubertbase', 'hubertbase768', 'contentvec', 'contentvec768' or 'contentvec768l12'
   encoder_sample_rate: 16000
   encoder_hop_size: 320
-  encoder_out_channels: 256 # 768 if using 'hubertbase768' or 'contentvec768' encoder
+  encoder_out_channels: 256 # 768 if using 'hubertbase768', 'contentvec768' or 'contentvec768l12' encoder
   encoder_ckpt: pretrain/hubert/hubert-soft-0d54a1f4.pt
   train_path: data/train # Create a folder named "audio" under this path and put the audio clip in it
   valid_path: data/val # Create a folder named "audio" under this path and put the audio clip in it
