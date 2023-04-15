@@ -87,7 +87,7 @@ data/val/audio/2/ggg.wav
 data/val/audio/2/hhh.wav
 ...
 ```
-'n_spk' = 1인 경우 **1인 Speaker**모델에 대한 폴더 구조도 지원하며 다음과 같습니다:
+'n_spk' = 1인 경우 **1인 Speaker** 모델에 대한 폴더 구조도 지원하며 다음과 같습니다:
 
 ```bash
 # 학습 데이터셋
