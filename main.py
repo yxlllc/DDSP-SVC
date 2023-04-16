@@ -166,7 +166,7 @@ if __name__ == '__main__':
         print("MD5: " + md5_hash)
     
     cache_dir_path = os.path.join(os.path.dirname(__file__), "cache")
-    cache_file_path = os.path.join(cache_dir_path, f"{cmd.pitch_extractor}_{cmd.f0_min}_{cmd.f0_max}_{md5_hash}.npy")
+    cache_file_path = os.path.join(cache_dir_path, f"{cmd.pitch_extractor}_{hop_size}_{cmd.f0_min}_{cmd.f0_max}_{md5_hash}.npy")
     
     is_cache_available = os.path.exists(cache_file_path)
     if is_cache_available:
