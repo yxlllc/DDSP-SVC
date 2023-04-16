@@ -109,21 +109,16 @@ class STFT():
         y = y.squeeze(1)
         
         spec = torch.stft(y, n_fft_new, hop_length=hop_length_new, win_length=win_size_new, window=self.hann_window[keyshift_key],
-                          center=center, pad_mode='reflect', normalized=False, onesided=True, return_complex=False)
-        # print(111,spec)
-        spec = torch.sqrt(spec.pow(2).sum(-1)+(1e-9))
+                          center=center, pad_mode='reflect', normalized=False, onesided=True, return_complex=True)                          
+        spec = torch.sqrt(spec.real.pow(2) + spec.imag.pow(2) + (1e-9))
         if keyshift != 0:
             size = n_fft // 2 + 1
             resize = spec.size(1)
             if resize < size:
                 spec = F.pad(spec, (0, 0, 0, size-resize))
-            spec = spec[:, :size, :] * win_size / win_size_new
-            
-        # print(222,spec)
+            spec = spec[:, :size, :] * win_size / win_size_new   
         spec = torch.matmul(self.mel_basis[mel_basis_key], spec)
-        # print(333,spec)
         spec = dynamic_range_compression_torch(spec, clip_val=clip_val)
-        # print(444,spec)
         return spec
     
     def __call__(self, audiopath):

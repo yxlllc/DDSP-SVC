@@ -58,18 +58,21 @@ class Enhancer:
         n_frames = int(audio_res.size(-1) // self.enhancer_hop_size + 1)
         
         # resample f0
-        f0_np = f0.squeeze(0).squeeze(-1).cpu().numpy()
-        f0_np *= real_factor
-        time_org = (hop_size / sample_rate) * np.arange(len(f0_np)) / real_factor
-        time_frame = (self.enhancer_hop_size / self.enhancer_sample_rate) * np.arange(n_frames)
-        f0_res = np.interp(time_frame, time_org, f0_np, left=f0_np[0], right=f0_np[-1])
-        f0_res = torch.from_numpy(f0_res).unsqueeze(0).float().to(self.device) # 1, n_frames
+        if hop_size == self.enhancer_hop_size and sample_rate == self.enhancer_sample_rate and sample_rate == adaptive_sample_rate:
+            f0_res = f0.squeeze(-1) # 1, n_frames
+        else:
+            f0_np = f0.squeeze(0).squeeze(-1).cpu().numpy()
+            f0_np *= real_factor
+            time_org = (hop_size / sample_rate) * np.arange(len(f0_np)) / real_factor
+            time_frame = (self.enhancer_hop_size / self.enhancer_sample_rate) * np.arange(n_frames)
+            f0_res = np.interp(time_frame, time_org, f0_np, left=f0_np[0], right=f0_np[-1])
+            f0_res = torch.from_numpy(f0_res).unsqueeze(0).float().to(self.device) # 1, n_frames
 
         # enhance
         enhanced_audio, enhancer_sample_rate = self.enhancer(audio_res, f0_res)
         
         # resample the enhanced output
-        if adaptive_factor != 0:
+        if adaptive_sample_rate != enhancer_sample_rate:
             key_str = str(adaptive_sample_rate) + str(enhancer_sample_rate)
             if key_str not in self.resample_kernel:
                 self.resample_kernel[key_str] = Resample(adaptive_sample_rate, enhancer_sample_rate, lowpass_filter_width = 128).to(self.device)
@@ -90,6 +93,14 @@ class NsfHifiGAN(torch.nn.Module):
         self.device = device
         print('| Load HifiGAN: ', model_path)
         self.model, self.h = load_model(model_path, device=self.device)
+        self.stft = STFT(
+                self.h.sampling_rate, 
+                self.h.num_mels, 
+                self.h.n_fft, 
+                self.h.win_size, 
+                self.h.hop_size, 
+                self.h.fmin, 
+                self.h.fmax)
     
     def sample_rate(self):
         return self.h.sampling_rate
@@ -98,15 +109,7 @@ class NsfHifiGAN(torch.nn.Module):
         return self.h.hop_size
         
     def forward(self, audio, f0):
-        stft = STFT(
-                self.h.sampling_rate, 
-                self.h.num_mels, 
-                self.h.n_fft, 
-                self.h.win_size, 
-                self.h.hop_size, 
-                self.h.fmin, 
-                self.h.fmax)
         with torch.no_grad():
-            mel = stft.get_mel(audio)
+            mel = self.stft.get_mel(audio)
             enhanced_audio = self.model(mel, f0[:,:mel.size(-1)])
             return enhanced_audio, self.h.sampling_rate
