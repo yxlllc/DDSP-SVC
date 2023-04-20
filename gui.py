@@ -51,11 +51,16 @@ class SvcDDSP:
 
             # load units encoder
             if self.units_encoder is None or self.args.data.encoder != self.encoder_type or self.args.data.encoder_ckpt != self.encoder_ckpt:
+                if self.args.data.encoder == 'cnhubertsoftfish':
+                    cnhubertsoft_gate = self.args.data.cnhubertsoft_gate
+                else:
+                    cnhubertsoft_gate = 10
                 self.units_encoder = Units_Encoder(
                     self.args.data.encoder,
                     self.args.data.encoder_ckpt,
                     self.args.data.encoder_sample_rate,
                     self.args.data.encoder_hop_size,
+                    cnhubertsoft_gate=cnhubertsoft_gate,
                     device=self.device)
                 self.encoder_type = self.args.data.encoder
                 self.encoder_ckpt = self.args.data.encoder_ckpt
