@@ -7,6 +7,7 @@ import pyworld as pw
 import parselmouth
 import torchcrepe
 import resampy
+from transformers import HubertModel, Wav2Vec2FeatureExtractor
 from fairseq import checkpoint_utils
 from encoder.hubert.model import HubertSoft
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
@@ -112,7 +113,8 @@ class Volume_Extractor:
     
          
 class Units_Encoder:
-    def __init__(self, encoder, encoder_ckpt, encoder_sample_rate = 16000, encoder_hop_size = 320, device = None):
+    def __init__(self, encoder, encoder_ckpt, encoder_sample_rate = 16000, encoder_hop_size = 320, device = None,
+                 cnhubertsoft_gate=10):
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = device
@@ -135,6 +137,9 @@ class Units_Encoder:
             is_loaded_encoder = True
         if encoder == 'contentvec768l12':
             self.model = Audio2ContentVec768L12(encoder_ckpt, device=device)
+            is_loaded_encoder = True
+        if encoder == 'cnhubertsoftfish':
+            self.model = CNHubertSoftFish(encoder_ckpt, device=device, gate_size=cnhubertsoft_gate)
             is_loaded_encoder = True
         if not is_loaded_encoder:
             raise ValueError(f" [x] Unknown units encoder: {encoder}")
@@ -269,7 +274,44 @@ class Audio2ContentVec768L12():
             feats = logits[0]
         units = feats  # .transpose(2, 1)
         return units    
-    
+
+
+class CNHubertSoftFish(torch.nn.Module):
+    def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu', gate_size=10):
+        super().__init__()
+        self.device = device
+        self.gate_size = gate_size
+
+        self.feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
+            "./pretrain/TencentGameMate/chinese-hubert-base")
+        self.model = HubertModel.from_pretrained("./pretrain/TencentGameMate/chinese-hubert-base")
+        self.proj = torch.nn.Sequential(torch.nn.Dropout(0.1), torch.nn.Linear(768, 256))
+        # self.label_embedding = nn.Embedding(128, 256)
+
+        state_dict = torch.load(path, map_location=device)
+        self.load_state_dict(state_dict)
+
+    @torch.no_grad()
+    def forward(self, audio):
+        input_values = self.feature_extractor(
+            audio, sampling_rate=16000, return_tensors="pt"
+        ).input_values
+        input_values = input_values.to(self.model.device)
+
+        return self._forward(input_values[0])
+
+    @torch.no_grad()
+    def _forward(self, input_values):
+        features = self.model(input_values)
+        features = self.proj(features.last_hidden_state)
+
+        # Top-k gating
+        topk, indices = torch.topk(features, self.gate_size, dim=2)
+        features = torch.zeros_like(features).scatter(2, indices, topk)
+        features = features / features.sum(2, keepdim=True)
+
+        return features.to(self.device)  # .transpose(1, 2)
+
     
 class Audio2HubertBase():
     def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu'):
