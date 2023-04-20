@@ -9,6 +9,7 @@ import shutil
 from logger import utils
 from tqdm import tqdm
 from ddsp.vocoder import F0_Extractor, Volume_Extractor, Units_Encoder
+from diffusion.vocoder import Vocoder
 from logger.utils import traverse_dir
 import concurrent.futures
 
@@ -23,12 +24,13 @@ def parse_args(args=None, namespace=None):
         help="path to the config file")
     return parser.parse_args(args=args, namespace=namespace)
     
-def preprocess(path, f0_extractor, volume_extractor, units_encoder, sample_rate, hop_size, device = 'cuda'):
+def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = 'cuda'):
     
     path_srcdir  = os.path.join(path, 'audio')
     path_unitsdir  = os.path.join(path, 'units')
     path_f0dir  = os.path.join(path, 'f0')
     path_volumedir  = os.path.join(path, 'volume')
+    path_meldir  = os.path.join(path, 'mel')
     path_skipdir = os.path.join(path, 'skip')
     
     # list files
@@ -47,6 +49,7 @@ def preprocess(path, f0_extractor, volume_extractor, units_encoder, sample_rate,
         path_unitsfile = os.path.join(path_unitsdir, binfile)
         path_f0file = os.path.join(path_f0dir, binfile)
         path_volumefile = os.path.join(path_volumedir, binfile)
+        path_melfile = os.path.join(path_meldir, binfile)
         path_skipfile = os.path.join(path_skipdir, file)
         
         # load audio
@@ -58,6 +61,11 @@ def preprocess(path, f0_extractor, volume_extractor, units_encoder, sample_rate,
         
         # extract volume
         volume = volume_extractor.extract(audio)
+        
+        # extract mel
+        if mel_extractor is not None:
+            mel_t = mel_extractor.extract(audio_t, sample_rate)
+            mel = mel_t.squeeze().to('cpu').numpy()
         
         # units encode
         units_t = units_encoder.encode(audio_t, sample_rate, hop_size)
@@ -78,6 +86,9 @@ def preprocess(path, f0_extractor, volume_extractor, units_encoder, sample_rate,
             np.save(path_f0file, f0)
             os.makedirs(os.path.dirname(path_volumefile), exist_ok=True)
             np.save(path_volumefile, volume)
+            if mel_extractor is not None:
+                os.makedirs(os.path.dirname(path_melfile), exist_ok=True)
+                np.save(path_melfile, mel)
         else:
             print('\n[Error] F0 extraction failed: ' + path_srcfile)
             os.makedirs(os.path.dirname(path_skipfile), exist_ok=True)
@@ -116,7 +127,15 @@ if __name__ == '__main__':
     
     # initialize volume extractor
     volume_extractor = Volume_Extractor(args.data.block_size)
-                        
+    
+    # initialize mel extractor
+    mel_extractor = None
+    if args.model.type == 'Diffusion':
+        mel_extractor = Vocoder(args.vocoder.type, args.vocoder.ckpt, device = device)
+        if mel_extractor.vocoder_sample_rate != sample_rate or mel_extractor.vocoder_hop_size != hop_size:
+            mel_extractor = None
+            print('Unmatch vocoder parameters, mel extraction is ignored!')
+    
     # initialize units encoder
     units_encoder = Units_Encoder(
                         args.data.encoder, 
@@ -126,8 +145,8 @@ if __name__ == '__main__':
                         device = device)    
     
     # preprocess training set
-    preprocess(args.data.train_path, f0_extractor, volume_extractor, units_encoder, sample_rate, hop_size, device = device)
+    preprocess(args.data.train_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device)
     
     # preprocess validation set
-    preprocess(args.data.valid_path, f0_extractor, volume_extractor, units_encoder, sample_rate, hop_size, device = device)
+    preprocess(args.data.valid_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device)
     
