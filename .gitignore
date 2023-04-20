@@ -4,5 +4,5 @@ venv/
 results/
 configs/
 !configs/combsub.yaml
-
+!configs/diffusion.yaml
 cache/
