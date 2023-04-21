@@ -475,7 +475,7 @@ class GUI:
             diff_model=_diff_model,
             diff_acc=self.config.diff_acc,
             diff_spk_id=self.config.diff_spk_id,
-            diff_use_dpm=self.config.diff_use_dpm
+            diff_use_dpm=self.config.diff_use_dpm,
             k_step=self.config.k_step,
             diff_silence=self.config.diff_silence
         )
