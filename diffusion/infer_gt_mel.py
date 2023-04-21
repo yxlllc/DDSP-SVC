@@ -60,10 +60,10 @@ class DiffGtMel:
 
     def infer(self, audio, f0, hubert, volume, acc=1, spk_id=1, gt_mel_steps=0, use_dpm=True, silence_front=0,
               use_silence=False, spk_mix_dict=None):
-        start_frame = int(silence_front * 44100 / 512)
-        real_silence_front = start_frame * 512 / 44100
+        start_frame = int(silence_front * self.vocoder.vocoder_sample_rate / self.vocoder.vocoder_hop_size)
+        real_silence_front = start_frame * self.vocoder.vocoder_hop_size / self.vocoder.vocoder_sample_rate
         if use_silence:
-            audio = audio[:, int(np.round(real_silence_front * 44100)):]
+            audio = audio[:, int(np.round(real_silence_front * self.vocoder.vocoder_sample_rate)):]
             f0 = f0[:, start_frame:, :]
             hubert = hubert[:, start_frame:, :]
             volume = volume[:, start_frame:, :]
