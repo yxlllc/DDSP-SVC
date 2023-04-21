@@ -338,6 +338,7 @@ class GUI:
             elif event == 'diff_use':
                 self.config.diff_use = values['diff_use']
                 self.window['use_enhancer'].update(False)
+                self.config.use_vocoder_based_enhancer=False
             elif event == 'diff_silence':
                 self.config.diff_silence = values['diff_silence']
             elif event == 'diff_use_dpm':
@@ -359,6 +360,7 @@ class GUI:
             elif event == 'use_enhancer':
                 self.config.use_vocoder_based_enhancer = values['use_enhancer']
                 self.window['diff_use'].update(False)
+                self.config.diff_use = False
             elif event == 'use_phase_vocoder':
                 self.config.use_phase_vocoder = values['use_phase_vocoder']
             elif event == 'load_config' and self.flag_vc == False:
