@@ -22,6 +22,13 @@ def parse_args(args=None, namespace=None):
         type=str,
         required=True,
         help="path to the config file")
+    parser.add_argument(
+        "-d",
+        "--device",
+        type=str,
+        default=None,
+        required=False,
+        help="cpu or cuda, auto if not set")
     return parser.parse_args(args=args, namespace=namespace)
     
 def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = 'cuda'):
@@ -107,11 +114,13 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
     '''
                 
 if __name__ == '__main__':
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
     # parse commands
     cmd = parse_args()
-    
+
+    device = cmd.device
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     # load config
     args = utils.load_config(cmd.config)
     sample_rate = args.data.sampling_rate
