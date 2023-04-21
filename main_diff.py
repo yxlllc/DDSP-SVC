@@ -45,6 +45,13 @@ def parse_args(args=None, namespace=None):
         help="path to the DDSP model checkpoint (for shallow diffusion)",
     )
     parser.add_argument(
+        "-d",
+        "--device",
+        type=str,
+        default=None,
+        required=False,
+        help="cpu or cuda, auto if not set")
+    parser.add_argument(
         "-i",
         "--input",
         type=str,
@@ -83,14 +90,6 @@ def parse_args(args=None, namespace=None):
         help="key changed (number of semitones) | default: 0",
     )
     parser.add_argument(
-        "-speedup",
-        "--speedup",
-        type=str,
-        required=False,
-        default='auto',
-        help="speed up | default: auto",
-    )
-    parser.add_argument(
         "-pe",
         "--pitch_extractor",
         type=str,
@@ -123,6 +122,22 @@ def parse_args(args=None, namespace=None):
         help="response threhold (dB) | default: -60",
     )
     parser.add_argument(
+        "-diffid",
+        "--diff_spk_id",
+        type=str,
+        required=False,
+        default='auto',
+        help="diffusion speaker id (for multi-speaker model) | default: auto",
+    )
+    parser.add_argument(
+        "-speedup",
+        "--speedup",
+        type=str,
+        required=False,
+        default='auto',
+        help="speed up | default: auto",
+    )
+    parser.add_argument(
         "-method",
         "--method",
         type=str,
@@ -135,7 +150,7 @@ def parse_args(args=None, namespace=None):
         "--k_step",
         type=str,
         required=False,
-        default='None',
+        default=None,
         help="shallow diffusion steps | default: None",
     )
     return parser.parse_args(args=args, namespace=namespace)
@@ -171,11 +186,13 @@ def cross_fade(a: np.ndarray, b: np.ndarray, idx: int):
 
 
 if __name__ == '__main__':
-    #device = 'cpu' 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
     # parse commands
     cmd = parse_args()
+    
+    #device = 'cpu' 
+    device = cmd.device
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     # load diffusion model
     model, vocoder, args = load_model_vocoder(cmd.diff_ckpt, device=device)
@@ -248,11 +265,16 @@ if __name__ == '__main__':
                             
     # speaker id or mix-speaker dictionary
     spk_mix_dict = literal_eval(cmd.spk_mix_dict)
+    spk_id = torch.LongTensor(np.array([[int(cmd.spk_id)]])).to(device)
+    if cmd.diff_spk_id == 'auto':
+        diff_spk_id = spk_id
+    else:
+        diff_spk_id = torch.LongTensor(np.array([[int(cmd.diff_spk_id)]])).to(device)
     if spk_mix_dict is not None:
         print('Mix-speaker mode')
     else:
-        print('Speaker ID: '+ str(int(cmd.spk_id)))        
-    spk_id = torch.LongTensor(np.array([[int(cmd.spk_id)]])).to(device)
+        print('DDSP Speaker ID: '+ str(int(cmd.spk_id)))
+        print('Diffusion Speaker ID: '+ str(cmd.diff_spk_id)) 
     
     # speed up
     if cmd.speedup == 'auto':
@@ -272,7 +294,7 @@ if __name__ == '__main__':
     ddsp = None
     input_mel = None
     k_step = None
-    if cmd.k_step != 'None':
+    if cmd.k_step is not None:
         k_step = int(cmd.k_step)
         print('Shallow diffusion step: ' + str(k_step))
         if cmd.ddsp_ckpt != "None":
@@ -315,7 +337,7 @@ if __name__ == '__main__':
                     seg_units, 
                     seg_f0, 
                     seg_volume, 
-                    spk_id = spk_id, 
+                    spk_id = diff_spk_id, 
                     spk_mix_dict = spk_mix_dict,
                     gt_spec=seg_input_mel,
                     infer=True, 

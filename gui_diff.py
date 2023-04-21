@@ -90,6 +90,7 @@ class SvcDDSP:
               diff_model=None,
               diff_acc=None,
               diff_spk_id=None,
+              diff_use_dpm=True,
               k_step=None,
               diff_silence=False,
               audio_alignment=False
@@ -143,7 +144,7 @@ class SvcDDSP:
             output, _, (s_h, s_n) = self.model(units, f0, volume, spk_id=spk_id, spk_mix_dict=dictionary)
             if diff_model is not None:
                 output = diff_model.infer(output, f0, units, volume, acc=diff_acc, spk_id=diff_spk_id,
-                                          k_step=k_step, silence_front=silence_front, use_silence=diff_silence,
+                                          k_step=k_step, use_dpm=diff_use_dpm, silence_front=silence_front, use_silence=diff_silence,
                                           spk_mix_dict=dictionary)
             output *= mask
             if use_enhancer and (diff_model is None):
@@ -280,12 +281,12 @@ class GUI:
                     [sg.Text(i18n("扩散模型文件"))],
                     [sg.Input(key='diff_project', default_text='exp\\diffusion-test\\model_700000.pt'),
                      sg.FileBrowse(i18n('选择模型文件'), key='choose_model')],
-                    [sg.Text(i18n("扩散说话人id")), sg.Input(key='diff_spk_id', default_text='0', size=18)],
+                    [sg.Text(i18n("扩散说话人id")), sg.Input(key='diff_spk_id', default_text='1', size=18)],
                     [sg.Text(i18n("扩散深度")), sg.Input(key='k_step', default_text='100', size=18)],
                     [sg.Text(i18n("扩散加速")), sg.Input(key='diff_acc', default_text='25', size=18)],
-                    [sg.Checkbox(text=i18n('启用DPMs(推荐)'), default=False, key='diff_use_dpm', enable_events=False)],
+                    [sg.Checkbox(text=i18n('启用DPMs(推荐)'), default=False, key='diff_use_dpm', enable_events=True)],
                     [sg.Checkbox(text=i18n('启用扩散'), default=False, key='diff_use', enable_events=True),
-                     sg.Checkbox(text=i18n('不扩散安全区(加速但损失效果)'), default=False, key='diff_silence', enable_events=False)]
+                     sg.Checkbox(text=i18n('不扩散安全区(加速但损失效果)'), default=False, key='diff_silence', enable_events=True)]
                 ], title=i18n('扩散设置')),
             ],
             [sg.Button(i18n("开始音频转换"), key="start_vc"), sg.Button(i18n("停止音频转换"), key="stop_vc"),
@@ -296,6 +297,9 @@ class GUI:
         self.window = sg.Window('DDSP - GUI', layout, finalize=True)
         self.window['spk_id'].bind('<Return>', '')
         self.window['samplerate'].bind('<Return>', '')
+        self.window['diff_spk_id'].bind('<Return>', '')
+        self.window['k_step'].bind('<Return>', '')
+        self.window['diff_acc'].bind('<Return>', '')
         self.event_handler()
 
     def event_handler(self):
@@ -318,8 +322,6 @@ class GUI:
                 print("enhancer:" + str(self.config.use_vocoder_based_enhancer))
                 print('using_cuda:' + str(torch.cuda.is_available()))
                 self.start_vc()
-            elif event == 'diff_project':
-                self.config.diff_project = values['']
             elif event == 'k_step':
                 if 1 <= int(values['k_step']) <= 100:
                     self.config.k_step = int(values['k_step'])
@@ -473,6 +475,7 @@ class GUI:
             diff_model=_diff_model,
             diff_acc=self.config.diff_acc,
             diff_spk_id=self.config.diff_spk_id,
+            diff_use_dpm=self.config.diff_use_dpm
             k_step=self.config.k_step,
             diff_silence=self.config.diff_silence
         )

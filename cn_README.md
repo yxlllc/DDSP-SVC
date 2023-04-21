@@ -14,23 +14,25 @@ python preprocess.py -c configs/diffusion.yaml
 
 训练扩散模型：
 ```bash
-python train-diff.py -c configs/diffusion.yaml
+python train_diff.py -c configs/diffusion.yaml
 ```
 训练 DDSP 模型：
 ```bash
 python train.py -c configs/combsub.yaml
 ```
-如上所述，可以不需要重新预处理，但请检查 combsub.yaml 与 diffusion.yaml 是否参数匹配。说话人数 n_spk 可以不一致，但是请务必用相同的编号表示相同的说话人。
+如上所述，可以不需要重新预处理，但请检查 combsub.yaml 与 diffusion.yaml 是否参数匹配。说话人数 n_spk 可以不一致，但是尽量用相同的编号表示相同的说话人（推理更简单）。
 
 推理：
 ```bash
-python main.py -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+python main_diff.py -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
 ```
-speedup 为加速倍速，method 为 pndm 或者 dpm-solver, kstep为浅扩散步数，其他参数与 main.py 含义相同。
+speedup 为加速倍速，method 为 pndm 或者 dpm-solver, kstep为浅扩散步数，diffid 为扩散模型的说话人id，其他参数与 main.py 含义相同。
+
+如果训练时已经用相同的编号表示相同的说话人，则 -diffid 可以为空，否则需要指定 -diffid 选项。
 
 如果 -ddsp 为空，则使用纯扩散模型 ，此时以输入源的 mel 进行浅扩散，若进一步 -kstep 为空，则进行完整深度的高斯扩散。
 
-程序会自动检查 DDSP 模型和扩散模型的参数是否匹配 （采样率，帧长和编码器），不匹配会忽略加载 DDSP 模型.
+程序会自动检查 DDSP 模型和扩散模型的参数是否匹配 （采样率，帧长和编码器），不匹配会忽略加载 DDSP 模型并进入高斯扩散模式。
 
 ## 0.简介
 DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个人电脑上普及的自由 AI 变声器软件。
