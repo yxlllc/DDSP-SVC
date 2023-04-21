@@ -90,7 +90,8 @@ class SvcDDSP:
               diff_model=None,
               diff_acc=None,
               diff_spk_id=None,
-              diff_use_dpm=True,
+              diff_use=False,
+              diff_use_dpm=False,
               k_step=None,
               diff_silence=False,
               audio_alignment=False
@@ -142,12 +143,12 @@ class SvcDDSP:
             # forward and return the output
         with torch.no_grad():
             output, _, (s_h, s_n) = self.model(units, f0, volume, spk_id=spk_id, spk_mix_dict=dictionary)
-            if diff_model is not None:
+            if diff_use and diff_model is not None:
                 output = diff_model.infer(output, f0, units, volume, acc=diff_acc, spk_id=diff_spk_id,
                                           k_step=k_step, use_dpm=diff_use_dpm, silence_front=silence_front, use_silence=diff_silence,
                                           spk_mix_dict=dictionary)
             output *= mask
-            if use_enhancer and (diff_model is None):
+            if use_enhancer and not diff_use:
                 output, output_sample_rate = self.enhancer.enhance(
                     output,
                     self.args.data.sampling_rate,
@@ -475,6 +476,7 @@ class GUI:
             diff_model=_diff_model,
             diff_acc=self.config.diff_acc,
             diff_spk_id=self.config.diff_spk_id,
+            diff_use=self.config.diff_use,
             diff_use_dpm=self.config.diff_use_dpm,
             k_step=self.config.k_step,
             diff_silence=self.config.diff_silence
