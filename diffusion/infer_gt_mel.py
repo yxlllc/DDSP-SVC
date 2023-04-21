@@ -32,7 +32,7 @@ class DiffGtMel:
             raise ValueError("DDSP与DIFF模型的encoder不一致")
         return True
 
-    def __call__(self, audio, f0, hubert, volume, acc=1, spk_id=1, gt_mel_steps=0, use_dpm=True,
+    def __call__(self, audio, f0, hubert, volume, acc=1, spk_id=1, k_step=0, use_dpm=True,
                  spk_mix_dict=None, start_frame=None):
         input_mel = self.vocoder.extract(audio, self.args.data.sampling_rate)
         if use_dpm:
@@ -49,16 +49,16 @@ class DiffGtMel:
             infer=True,
             infer_speedup=acc,
             method=method,
-            k_step=gt_mel_steps)
+            k_step=k_step)
         if start_frame is not None:
             out_mel = out_mel[:, start_frame:, :]
             f0 = f0[:, start_frame:, :]
         output = self.vocoder.infer(out_mel, f0)
         if start_frame is not None:
-            output = F.pad(output, (int(np.round(44100 * (start_frame * 512 / 44100))), 0))
+            output = F.pad(output, (int(np.round(self.vocoder.vocoder_sample_rate * (start_frame * self.vocoder.vocoder_hop_size / self.vocoder.vocoder_sample_rate))), 0))
         return output
 
-    def infer(self, audio, f0, hubert, volume, acc=1, spk_id=1, gt_mel_steps=0, use_dpm=True, silence_front=0,
+    def infer(self, audio, f0, hubert, volume, acc=1, spk_id=1, k_step=0, use_dpm=True, silence_front=0,
               use_silence=False, spk_mix_dict=None):
         start_frame = int(silence_front * self.vocoder.vocoder_sample_rate / self.vocoder.vocoder_hop_size)
         real_silence_front = start_frame * self.vocoder.vocoder_hop_size / self.vocoder.vocoder_sample_rate
@@ -70,9 +70,9 @@ class DiffGtMel:
             _start_frame = None
         else:
             _start_frame = start_frame
-        audio = self.__call__(audio, f0, hubert, volume, acc=acc, spk_id=spk_id, gt_mel_steps=gt_mel_steps,
+        audio = self.__call__(audio, f0, hubert, volume, acc=acc, spk_id=spk_id, k_step=k_step,
                               use_dpm=use_dpm, spk_mix_dict=spk_mix_dict, start_frame=_start_frame)
         if use_silence:
             if start_frame > 0:
-                audio = F.pad(audio, (int(np.round(44100 * real_silence_front)), 0))
+                audio = F.pad(audio, (int(np.round(self.vocoder.vocoder_sample_rate * real_silence_front)), 0))
         return audio
