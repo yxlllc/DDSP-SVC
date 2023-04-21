@@ -5,10 +5,12 @@ from enhancer import Enhancer
 import numpy as np
 from torch.nn import functional as F
 from torchaudio.transforms import Resample
+import torchaudio
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
 from ddsp.core import upsample
 import time
-import gui_locale
+from gui_diff_locale import I18nAuto
+from diffusion.infer_gt_mel import DiffGtMel
 
 
 def phase_vocoder(a, b, fade_out, fade_in):
@@ -85,16 +87,25 @@ class SvcDDSP:
               f0_min=50,
               f0_max=1100,
               safe_prefix_pad_length=0,
+              diff_model=None,
+              diff_acc=None,
+              diff_spk_id=None,
+              k_step=None,
+              diff_silence=False,
+              audio_alignment=False
               ):
         print("Infering...")
         # load input
         # audio, sample_rate = librosa.load(input_wav, sr=None, mono=True)
         hop_size = self.args.data.block_size * sample_rate / self.args.data.sampling_rate
+        if audio_alignment:
+            audio_length = len(audio)
         # safe front silence
         if safe_prefix_pad_length > 0.03:
             silence_front = safe_prefix_pad_length - 0.03
         else:
             silence_front = 0
+        audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(self.device)
 
         # extract f0
         pitch_extractor = F0_Extractor(
@@ -118,11 +129,11 @@ class SvcDDSP:
         volume = torch.from_numpy(volume).float().to(self.device).unsqueeze(-1).unsqueeze(0)
 
         # extract units
-        audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(self.device)
         units = self.units_encoder.encode(audio_t, sample_rate, hop_size)
 
         # spk_id or spk_mix_dict
         spk_id = torch.LongTensor(np.array([[spk_id]])).to(self.device)
+        diff_spk_id = torch.LongTensor(np.array([[diff_spk_id]])).to(self.device)
         dictionary = None
         if use_spk_mix:
             dictionary = spk_mix_dict
@@ -130,19 +141,25 @@ class SvcDDSP:
             # forward and return the output
         with torch.no_grad():
             output, _, (s_h, s_n) = self.model(units, f0, volume, spk_id=spk_id, spk_mix_dict=dictionary)
+            if diff_model is not None:
+                output = diff_model.infer(output, f0, units, volume, acc=diff_acc, spk_id=diff_spk_id,
+                                          k_step=k_step, silence_front=silence_front, use_silence=diff_silence,
+                                          spk_mix_dict=dictionary)
             output *= mask
-            if use_enhancer:
+            if use_enhancer and (diff_model is None):
                 output, output_sample_rate = self.enhancer.enhance(
                     output,
                     self.args.data.sampling_rate,
                     f0,
                     self.args.data.block_size,
                     adaptive_key=enhancer_adaptive_key,
-                    silence_front=silence_front)
+                    silence_front=0)
             else:
                 output_sample_rate = self.args.data.sampling_rate
 
             output = output.squeeze()
+            if audio_alignment:
+                output[:audio_length]
             return output, output_sample_rate
 
 
@@ -162,6 +179,13 @@ class Config:
         self.select_pitch_extractor = 'harvest'  # F0预测器["parselmouth", "dio", "harvest", "crepe"]
         self.use_spk_mix = False
         self.sounddevices = ['', '']
+        self.diff_use = False
+        self.diff_project = ''
+        self.diff_acc = 10
+        self.diff_spk_id = 0
+        self.k_step = 100
+        self.diff_use_dpm = False
+        self.diff_silence = False
 
     def save(self, path):
         with open(path + '\\config.pkl', 'wb') as f:
@@ -186,6 +210,7 @@ class GUI:
         self.sola_search_frame = 0
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.svc_model: SvcDDSP = SvcDDSP()
+        self.diff_model: DiffGtMel = DiffGtMel()
         self.fade_in_window: np.ndarray = None  # crossfade计算用numpy数组
         self.fade_out_window: np.ndarray = None  # crossfade计算用numpy数组
         self.input_wav: np.ndarray = None  # 输入音频规范化后的保存地址
@@ -199,17 +224,18 @@ class GUI:
     def launcher(self):
         '''窗口加载'''
         input_devices, output_devices, _, _ = self.get_devices()
-        sg.theme('DarkAmber')  # 设置主题
+        sg.theme('DarkBlue12')  # 设置主题
         # 界面布局
         layout = [
             [sg.Frame(layout=[
-                [sg.Input(key='sg_model', default_text='exp\\multi_speaker\\model_300000.pt'),
+                [sg.Input(key='sg_model', default_text='exp\\combsub-ms-test\\model_300000.pt'),
                  sg.FileBrowse(i18n('选择模型文件'), key='choose_model')]
             ], title=i18n('模型：.pt格式(自动识别同目录下config.yaml)')),
                 sg.Frame(layout=[
                     [sg.Text(i18n('选择配置文件所在目录')), sg.Input(key='config_file_dir', default_text='exp'),
                      sg.FolderBrowse(i18n('打开文件夹'), key='choose_config')],
-                    [sg.Button(i18n('读取配置文件'), key='load_config'), sg.Button(i18n('保存配置文件'), key='save_config')]
+                    [sg.Button(i18n('读取配置文件'), key='load_config'),
+                     sg.Button(i18n('保存配置文件'), key='save_config')]
                 ], title=i18n('快速配置文件'))
             ],
             [sg.Frame(layout=[
@@ -222,33 +248,45 @@ class GUI:
             ], title=i18n('音频设备'))
             ],
             [sg.Frame(layout=[
-                [sg.Text(i18n("说话人id")), sg.Input(key='spk_id', default_text='1')],
+                [sg.Text(i18n("说话人id")), sg.Input(key='spk_id', default_text='1', size=8)],
                 [sg.Text(i18n("响应阈值")),
                  sg.Slider(range=(-60, 0), orientation='h', key='threhold', resolution=1, default_value=-45,
                            enable_events=True)],
                 [sg.Text(i18n("变调")),
                  sg.Slider(range=(-24, 24), orientation='h', key='pitch', resolution=1, default_value=0,
                            enable_events=True)],
-                [sg.Text(i18n("采样率")), sg.Input(key='samplerate', default_text='44100')],
+                [sg.Text(i18n("采样率")), sg.Input(key='samplerate', default_text='44100', size=8)],
                 [sg.Checkbox(text=i18n('启用捏音色功能'), default=False, key='spk_mix', enable_events=True),
                  sg.Button(i18n("设置混合音色"), key='set_spk_mix')]
             ], title=i18n('普通设置')),
                 sg.Frame(layout=[
                     [sg.Text(i18n("音频切分大小")),
-                     sg.Slider(range=(0.05, 3.0), orientation='h', key='block', resolution=0.01, default_value=0.3,
+                     sg.Slider(range=(0.05, 3.0), orientation='h', key='block', resolution=0.01, default_value=0.2,
                                enable_events=True)],
                     [sg.Text(i18n("交叉淡化时长")),
                      sg.Slider(range=(0.01, 0.15), orientation='h', key='crossfade', resolution=0.01,
                                default_value=0.04, enable_events=True)],
                     [sg.Text(i18n("使用历史区块数量")),
-                     sg.Slider(range=(1, 20), orientation='h', key='buffernum', resolution=1, default_value=4,
+                     sg.Slider(range=(1, 20), orientation='h', key='buffernum', resolution=1, default_value=20,
                                enable_events=True)],
                     [sg.Text(i18n("f0预测模式")),
-                     sg.Combo(values=self.f0_mode_list, key='f0_mode', default_value=self.f0_mode_list[2],
+                     sg.Combo(values=self.f0_mode_list, key='f0_mode', default_value=self.f0_mode_list[3],
                               enable_events=True)],
                     [sg.Checkbox(text=i18n('启用增强器'), default=True, key='use_enhancer', enable_events=True),
-                     sg.Checkbox(text=i18n('启用相位声码器'), default=False, key='use_phase_vocoder', enable_events=True)]
+                     sg.Checkbox(text=i18n('启用相位声码器'), default=False, key='use_phase_vocoder',
+                                 enable_events=True)]
                 ], title=i18n('性能设置')),
+                sg.Frame(layout=[
+                    [sg.Text(i18n("扩散模型文件"))],
+                    [sg.Input(key='diff_project', default_text='exp\\diffusion-test\\model_700000.pt'),
+                     sg.FileBrowse(i18n('选择模型文件'), key='choose_model')],
+                    [sg.Text(i18n("扩散说话人id")), sg.Input(key='diff_spk_id', default_text='0', size=18)],
+                    [sg.Text(i18n("扩散深度")), sg.Input(key='k_step', default_text='100', size=18)],
+                    [sg.Text(i18n("扩散加速")), sg.Input(key='diff_acc', default_text='25', size=18)],
+                    [sg.Checkbox(text=i18n('启用DPMs(推荐)'), default=False, key='diff_use_dpm', enable_events=False)],
+                    [sg.Checkbox(text=i18n('启用扩散'), default=False, key='diff_use', enable_events=True),
+                     sg.Checkbox(text=i18n('不扩散安全区(加速但损失效果)'), default=False, key='diff_silence', enable_events=False)]
+                ], title=i18n('扩散设置')),
             ],
             [sg.Button(i18n("开始音频转换"), key="start_vc"), sg.Button(i18n("停止音频转换"), key="stop_vc"),
              sg.Text(i18n('推理所用时间(ms):')), sg.Text('0', key='infer_time')]
@@ -280,6 +318,27 @@ class GUI:
                 print("enhancer:" + str(self.config.use_vocoder_based_enhancer))
                 print('using_cuda:' + str(torch.cuda.is_available()))
                 self.start_vc()
+            elif event == 'diff_project':
+                self.config.diff_project = values['']
+            elif event == 'k_step':
+                if 1 <= int(values['k_step']) <= 100:
+                    self.config.k_step = int(values['k_step'])
+                else:
+                    self.window['k_step'].update(100)
+            elif event == 'diff_acc':
+                if self.config.k_step < values['diff_acc']:
+                    self.config.diff_acc = int(self.config.k_step / 4)
+                else:
+                    self.config.diff_acc = int(values['diff_acc'])
+            elif event == 'diff_spk_id':
+                self.config.diff_spk_id = int(values['diff_spk_id'])
+            elif event == 'diff_use':
+                self.config.diff_use = values['diff_use']
+                self.window['use_enhancer'].update(False)
+            elif event == 'diff_silence':
+                self.config.diff_silence = values['diff_silence']
+            elif event == 'diff_use_dpm':
+                self.config.diff_use_dpm = values['diff_use_dpm']
             elif event == 'spk_id':
                 self.config.spk_id = int(values['spk_id'])
             elif event == 'threhold':
@@ -296,6 +355,7 @@ class GUI:
                 self.config.select_pitch_extractor = values['f0_mode']
             elif event == 'use_enhancer':
                 self.config.use_vocoder_based_enhancer = values['use_enhancer']
+                self.window['diff_use'].update(False)
             elif event == 'use_phase_vocoder':
                 self.config.use_phase_vocoder = values['use_phase_vocoder']
             elif event == 'load_config' and self.flag_vc == False:
@@ -322,6 +382,13 @@ class GUI:
         self.config.use_vocoder_based_enhancer = values['use_enhancer']
         self.config.use_phase_vocoder = values['use_phase_vocoder']
         self.config.use_spk_mix = values['spk_mix']
+        self.config.diff_use = values['diff_use']
+        self.config.diff_silence = values['diff_silence']
+        self.config.diff_use_dpm = values['diff_use_dpm']
+        self.config.diff_project = values['diff_project']
+        self.config.diff_acc = int(values['diff_acc'])
+        self.config.diff_spk_id = int(values['diff_spk_id'])
+        self.config.k_step = int(values['k_step'])
         self.block_frame = int(self.config.block_time * self.config.samplerate)
         self.crossfade_frame = int(self.config.crossfade_time * self.config.samplerate)
         self.sola_search_frame = int(0.01 * self.config.samplerate)
@@ -345,6 +412,13 @@ class GUI:
         self.window['buffernum'].update(self.config.buffer_num)
         self.window['f0_mode'].update(self.config.select_pitch_extractor)
         self.window['use_enhancer'].update(self.config.use_vocoder_based_enhancer)
+        self.window['diff_use'].update(self.config.diff_use)
+        self.window['diff_silence'].update(self.config.diff_silence)
+        self.window['diff_use_dpm'].update(self.config.diff_use_dpm)
+        self.window['diff_project'].update(self.config.diff_project)
+        self.window['diff_acc'].update(self.config.diff_acc)
+        self.window['diff_spk_id'].update(self.config.diff_spk_id)
+        self.window['k_step'].update(self.config.k_step)
 
     def start_vc(self):
         '''开始音频转换'''
@@ -356,6 +430,7 @@ class GUI:
             np.pi * torch.arange(0, 1, 1 / self.crossfade_frame, device=self.device) / 2) ** 2
         self.fade_out_window = 1 - self.fade_in_window
         self.svc_model.update_model(self.config.checkpoint_path)
+        self.diff_model.flush_model(self.config.diff_project, ddsp_config=self.svc_model.args)
         thread_vc = threading.Thread(target=self.soundinput)
         thread_vc.start()
 
@@ -380,6 +455,10 @@ class GUI:
         self.input_wav[-self.block_frame:] = librosa.to_mono(indata.T)
 
         # infer
+        if self.config.diff_use:
+            _diff_model = self.diff_model
+        else:
+            _diff_model = None
         _audio, _model_sr = self.svc_model.infer(
             self.input_wav,
             self.config.samplerate,
@@ -391,6 +470,11 @@ class GUI:
             use_enhancer=self.config.use_vocoder_based_enhancer,
             pitch_extractor_type=self.config.select_pitch_extractor,
             safe_prefix_pad_length=self.f_safe_prefix_pad_length,
+            diff_model=_diff_model,
+            diff_acc=self.config.diff_acc,
+            diff_spk_id=self.config.diff_spk_id,
+            k_step=self.config.k_step,
+            diff_silence=self.config.diff_silence
         )
 
         # debug sola
@@ -473,7 +557,6 @@ class GUI:
         print("output device:" + str(sd.default.device[1]) + ":" + str(output_device))
 
 
-
 if __name__ == "__main__":
-    i18n = gui_locale.I18nAuto()
+    i18n = I18nAuto()
     gui = GUI()

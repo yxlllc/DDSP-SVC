@@ -67,11 +67,16 @@ class SvcDDSP:
         self.model, self.args = load_model(self.model_path, device=self.device)
         
         # load units encoder
+        if self.args.data.encoder == 'cnhubertsoftfish':
+            cnhubertsoft_gate = self.args.data.cnhubertsoft_gate
+        else:
+            cnhubertsoft_gate = 10
         self.units_encoder = Units_Encoder(
             self.args.data.encoder,
             self.args.data.encoder_ckpt,
             self.args.data.encoder_sample_rate,
             self.args.data.encoder_hop_size,
+            cnhubertsoft_gate=cnhubertsoft_gate,
             device=self.device)
         
         # load enhancer

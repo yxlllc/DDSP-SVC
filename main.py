@@ -206,11 +206,16 @@ if __name__ == '__main__':
     volume = torch.from_numpy(volume).float().to(device).unsqueeze(-1).unsqueeze(0)
     
     # load units encoder
+    if args.data.encoder == 'cnhubertsoftfish':
+        cnhubertsoft_gate = args.data.cnhubertsoft_gate
+    else:
+        cnhubertsoft_gate = 10
     units_encoder = Units_Encoder(
                         args.data.encoder, 
                         args.data.encoder_ckpt, 
                         args.data.encoder_sample_rate, 
-                        args.data.encoder_hop_size, 
+                        args.data.encoder_hop_size,
+                        cnhubertsoft_gate=cnhubertsoft_gate,
                         device = device)
                         
     # load enhancer

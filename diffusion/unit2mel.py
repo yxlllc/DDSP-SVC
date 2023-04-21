@@ -2,6 +2,7 @@ import os
 import yaml
 import torch
 import torch.nn as nn
+import numpy as np
 from .diffusion import GaussianDiffusion
 from .wavenet import WaveNet
 from .vocoder import Vocoder
