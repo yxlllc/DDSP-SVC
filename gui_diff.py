@@ -323,12 +323,12 @@ class GUI:
                 print('using_cuda:' + str(torch.cuda.is_available()))
                 self.start_vc()
             elif event == 'k_step':
-                if 1 <= int(values['k_step']) <= 100:
+                if 1 <= int(values['k_step']) <= 1000:
                     self.config.k_step = int(values['k_step'])
                 else:
-                    self.window['k_step'].update(100)
+                    self.window['k_step'].update(1000)
             elif event == 'diff_acc':
-                if self.config.k_step < values['diff_acc']:
+                if self.config.k_step < int(values['diff_acc']):
                     self.config.diff_acc = int(self.config.k_step / 4)
                 else:
                     self.config.diff_acc = int(values['diff_acc'])
