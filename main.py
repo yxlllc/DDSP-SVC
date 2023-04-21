@@ -25,6 +25,13 @@ def parse_args(args=None, namespace=None):
         help="path to the model file",
     )
     parser.add_argument(
+        "-d",
+        "--device",
+        type=str,
+        default=None,
+        required=False,
+        help="cpu or cuda, auto if not set")
+    parser.add_argument(
         "-i",
         "--input",
         type=str,
@@ -143,11 +150,13 @@ def cross_fade(a: np.ndarray, b: np.ndarray, idx: int):
 
 
 if __name__ == '__main__':
-    #device = 'cpu' 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
     # parse commands
     cmd = parse_args()
+
+    #device = 'cpu' 
+    device = cmd.device
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     # load ddsp model
     model, args = load_model(cmd.model_path, device=device)
