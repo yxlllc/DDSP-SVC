@@ -90,7 +90,7 @@ class SvcDDSP:
               diff_model=None,
               diff_acc=None,
               diff_spk_id=None,
-              diff_gt_mel=None,
+              k_step=None,
               diff_silence=False,
               audio_alignment=False
               ):
@@ -143,7 +143,7 @@ class SvcDDSP:
             output, _, (s_h, s_n) = self.model(units, f0, volume, spk_id=spk_id, spk_mix_dict=dictionary)
             if diff_model is not None:
                 output = diff_model.infer(output, f0, units, volume, acc=diff_acc, spk_id=diff_spk_id,
-                                          gt_mel_steps=diff_gt_mel, silence_front=silence_front, use_silence=diff_silence,
+                                          k_step=k_step, silence_front=silence_front, use_silence=diff_silence,
                                           spk_mix_dict=dictionary)
             output *= mask
             if use_enhancer and (diff_model is None):
@@ -183,7 +183,7 @@ class Config:
         self.diff_project = ''
         self.diff_acc = 10
         self.diff_spk_id = 0
-        self.diff_gt_mel = 100
+        self.k_step = 100
         self.diff_use_dpm = False
         self.diff_silence = False
 
@@ -281,7 +281,7 @@ class GUI:
                     [sg.Input(key='diff_project', default_text='exp\\diffusion-test\\model_700000.pt'),
                      sg.FileBrowse(i18n('选择模型文件'), key='choose_model')],
                     [sg.Text(i18n("扩散说话人id")), sg.Input(key='diff_spk_id', default_text='0', size=18)],
-                    [sg.Text(i18n("扩散深度")), sg.Input(key='diff_gt_mel', default_text='100', size=18)],
+                    [sg.Text(i18n("扩散深度")), sg.Input(key='k_step', default_text='100', size=18)],
                     [sg.Text(i18n("扩散加速")), sg.Input(key='diff_acc', default_text='25', size=18)],
                     [sg.Checkbox(text=i18n('启用DPMs(推荐)'), default=False, key='diff_use_dpm', enable_events=False)],
                     [sg.Checkbox(text=i18n('启用扩散'), default=False, key='diff_use', enable_events=True),
@@ -320,14 +320,14 @@ class GUI:
                 self.start_vc()
             elif event == 'diff_project':
                 self.config.diff_project = values['']
-            elif event == 'diff_gt_mel':
-                if 1 <= int(values['diff_gt_mel']) <= 100:
-                    self.config.diff_gt_mel = int(values['diff_gt_mel'])
+            elif event == 'k_step':
+                if 1 <= int(values['k_step']) <= 100:
+                    self.config.k_step = int(values['k_step'])
                 else:
-                    self.window['diff_gt_mel'].update(100)
+                    self.window['k_step'].update(100)
             elif event == 'diff_acc':
-                if self.config.diff_gt_mel < values['diff_acc']:
-                    self.config.diff_acc = int(self.config.diff_gt_mel / 4)
+                if self.config.k_step < values['diff_acc']:
+                    self.config.diff_acc = int(self.config.k_step / 4)
                 else:
                     self.config.diff_acc = int(values['diff_acc'])
             elif event == 'diff_spk_id':
@@ -388,7 +388,7 @@ class GUI:
         self.config.diff_project = values['diff_project']
         self.config.diff_acc = int(values['diff_acc'])
         self.config.diff_spk_id = int(values['diff_spk_id'])
-        self.config.diff_gt_mel = int(values['diff_gt_mel'])
+        self.config.k_step = int(values['k_step'])
         self.block_frame = int(self.config.block_time * self.config.samplerate)
         self.crossfade_frame = int(self.config.crossfade_time * self.config.samplerate)
         self.sola_search_frame = int(0.01 * self.config.samplerate)
@@ -418,7 +418,7 @@ class GUI:
         self.window['diff_project'].update(self.config.diff_project)
         self.window['diff_acc'].update(self.config.diff_acc)
         self.window['diff_spk_id'].update(self.config.diff_spk_id)
-        self.window['diff_gt_mel'].update(self.config.diff_gt_mel)
+        self.window['k_step'].update(self.config.k_step)
 
     def start_vc(self):
         '''开始音频转换'''
@@ -473,7 +473,7 @@ class GUI:
             diff_model=_diff_model,
             diff_acc=self.config.diff_acc,
             diff_spk_id=self.config.diff_spk_id,
-            diff_gt_mel=self.config.diff_gt_mel,
+            k_step=self.config.k_step,
             diff_silence=self.config.diff_silence
         )
 
