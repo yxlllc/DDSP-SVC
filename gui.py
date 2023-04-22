@@ -165,16 +165,20 @@ class Config:
 
     def save(self, path):
         with open(path + '\\config.pkl', 'wb') as f:
-            pickle.dump(self, f)
+            pickle.dump(vars(self), f)
 
     def load(self, path) -> bool:
         try:
             with open(path + '\\config.pkl', 'rb') as f:
-                self = pickle.load(f)
+                self.update(pickle.load(f))
             return True
         except:
             print('config.pkl does not exist')
             return False
+    
+    def update(self, data_dict):
+        for key, value in data_dict.items():
+            setattr(self, key, value)
 
 
 class GUI:

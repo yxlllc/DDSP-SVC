@@ -191,17 +191,20 @@ class Config:
 
     def save(self, path):
         with open(path + '\\config.pkl', 'wb') as f:
-            pickle.dump(self, f)
+            pickle.dump(vars(self), f)
 
     def load(self, path) -> bool:
         try:
             with open(path + '\\config.pkl', 'rb') as f:
-                self = pickle.load(f)
+                self.update(pickle.load(f))
             return True
         except:
             print('config.pkl does not exist')
             return False
-
+    
+    def update(self, data_dict):
+        for key, value in data_dict.items():
+            setattr(self, key, value)
 
 class GUI:
     def __init__(self) -> None:
@@ -307,11 +310,13 @@ class GUI:
         '''事件处理'''
         while True:  # 事件处理循环
             event, values = self.window.read()
-            print('event: ' + event)
             if event == sg.WINDOW_CLOSED:  # 如果用户关闭窗口
                 self.flag_vc = False
                 exit()
-            elif event == 'start_vc' and self.flag_vc == False:
+            
+            print('event: ' + event)
+            
+            if event == 'start_vc' and self.flag_vc == False:
                 # set values 和界面布局layout顺序一一对应
                 self.set_values(values)
                 print('crossfade_time:' + str(self.config.crossfade_time))
@@ -338,7 +343,6 @@ class GUI:
             elif event == 'diff_use':
                 self.config.diff_use = values['diff_use']
                 self.window['use_enhancer'].update(False)
-                self.config.use_vocoder_based_enhancer=False
             elif event == 'diff_silence':
                 self.config.diff_silence = values['diff_silence']
             elif event == 'diff_use_dpm':
@@ -360,7 +364,6 @@ class GUI:
             elif event == 'use_enhancer':
                 self.config.use_vocoder_based_enhancer = values['use_enhancer']
                 self.window['diff_use'].update(False)
-                self.config.diff_use = False
             elif event == 'use_phase_vocoder':
                 self.config.use_phase_vocoder = values['use_phase_vocoder']
             elif event == 'load_config' and self.flag_vc == False:
