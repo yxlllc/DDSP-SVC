@@ -84,7 +84,7 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
             log10_vol_shift = random.uniform(-1, max_shift)
             
             aug_mel_t = mel_extractor.extract(audio_t * (10 ** log10_vol_shift), sample_rate)
-            aug_mel = mel_t.squeeze().to('cpu').numpy()
+            aug_mel = aug_mel_t.squeeze().to('cpu').numpy()
             aug_vol = volume_extractor.extract(audio * (10 ** log10_vol_shift))
             
         # units encode
