@@ -109,13 +109,14 @@ def load_model(
     if len(path_pt) > 0:
         steps = [s[len(path):] for s in path_pt]
         maxstep = max([int(s) if s.isdigit() else 0 for s in steps])
-        if maxstep > 0:
+        if maxstep >= 0:
             path_pt = path+str(maxstep)+'.pt'
         else:
             path_pt = path+'best.pt'
         print(' [*] restoring model from', path_pt)
         ckpt = torch.load(path_pt, map_location=torch.device(device))
         global_step = ckpt['global_step']
-        model.load_state_dict(ckpt['model'])
-        optimizer.load_state_dict(ckpt['optimizer'])
+        model.load_state_dict(ckpt['model'], strict=False)
+        if maxstep != 0:
+            optimizer.load_state_dict(ckpt['optimizer'])
     return global_step, model, optimizer
