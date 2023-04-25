@@ -213,7 +213,8 @@ class GaussianDiffusion(nn.Module):
                 infer=True, 
                 infer_speedup=10, 
                 method='dpm-solver',
-                k_step=300):
+                k_step=300,
+                use_tqdm=True):
         """
             conditioning diffusion, use fastspeech2 encoder output as the condition
         """
@@ -249,7 +250,8 @@ class GaussianDiffusion(nn.Module):
                     def my_wrapper(fn):
                         def wrapped(x, t, **kwargs):
                             ret = fn(x, t, **kwargs)
-                            self.bar.update(1)
+                            if use_tqdm:
+                                self.bar.update(1)
                             return ret
 
                         return wrapped
@@ -268,7 +270,8 @@ class GaussianDiffusion(nn.Module):
                     dpm_solver = DPM_Solver(model_fn, noise_schedule)
 
                     steps = t // infer_speedup
-                    self.bar = tqdm(desc="sample time step", total=steps)
+                    if use_tqdm:
+                        self.bar = tqdm(desc="sample time step", total=steps)
                     x = dpm_solver.sample(
                         x,
                         steps=steps,
@@ -276,22 +279,34 @@ class GaussianDiffusion(nn.Module):
                         skip_type="time_uniform",
                         method="singlestep",
                     )
-                    self.bar.close()
+                    if use_tqdm:
+                        self.bar.close()
                 elif method == 'pndm':
                     self.noise_list = deque(maxlen=4)
-                    for i in tqdm(
-                            reversed(range(0, t, infer_speedup)), desc='sample time step',
-                            total=t // infer_speedup,
-                    ):
-                        x = self.p_sample_plms(
-                            x, torch.full((b,), i, device=device, dtype=torch.long),
-                            infer_speedup, cond=cond
-                        )
+                    if use_tqdm:
+                        for i in tqdm(
+                                reversed(range(0, t, infer_speedup)), desc='sample time step',
+                                total=t // infer_speedup,
+                        ):
+                            x = self.p_sample_plms(
+                                x, torch.full((b,), i, device=device, dtype=torch.long),
+                                infer_speedup, cond=cond
+                            )
+                    else:
+                        for i in reversed(range(0, t, infer_speedup)):
+                            x = self.p_sample_plms(
+                                x, torch.full((b,), i, device=device, dtype=torch.long),
+                                infer_speedup, cond=cond
+                            )
                 else:
                     raise NotImplementedError(method)
             else:
-                for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t):
-                    x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
+                if use_tqdm:
+                    for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t):
+                        x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
+                else:
+                    for i in reversed(range(0, t)):
+                        x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
             x = x.squeeze(1).transpose(1, 2)  # [B, T, M]
             return self.denorm_spec(x)
 

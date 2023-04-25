@@ -155,7 +155,7 @@ class SvcDDSP:
                     f0,
                     self.args.data.block_size,
                     adaptive_key=enhancer_adaptive_key,
-                    silence_front=0)
+                    silence_front=silence_front)
             else:
                 output_sample_rate = self.args.data.sampling_rate
 
@@ -233,7 +233,7 @@ class GUI:
         # 界面布局
         layout = [
             [sg.Frame(layout=[
-                [sg.Input(key='sg_model', default_text='exp\\combsub-ms-test\\model_300000.pt'),
+                [sg.Input(key='sg_model', default_text='exp\\combsub-test\\model_300000.pt'),
                  sg.FileBrowse(i18n('选择模型文件'), key='choose_model')]
             ], title=i18n('模型：.pt格式(自动识别同目录下config.yaml)')),
                 sg.Frame(layout=[
@@ -266,16 +266,16 @@ class GUI:
             ], title=i18n('普通设置')),
                 sg.Frame(layout=[
                     [sg.Text(i18n("音频切分大小")),
-                     sg.Slider(range=(0.05, 3.0), orientation='h', key='block', resolution=0.01, default_value=0.2,
+                     sg.Slider(range=(0.05, 3.0), orientation='h', key='block', resolution=0.01, default_value=0.5,
                                enable_events=True)],
                     [sg.Text(i18n("交叉淡化时长")),
                      sg.Slider(range=(0.01, 0.15), orientation='h', key='crossfade', resolution=0.01,
                                default_value=0.04, enable_events=True)],
                     [sg.Text(i18n("使用历史区块数量")),
-                     sg.Slider(range=(1, 20), orientation='h', key='buffernum', resolution=1, default_value=20,
+                     sg.Slider(range=(1, 20), orientation='h', key='buffernum', resolution=1, default_value=3,
                                enable_events=True)],
                     [sg.Text(i18n("f0预测模式")),
-                     sg.Combo(values=self.f0_mode_list, key='f0_mode', default_value=self.f0_mode_list[3],
+                     sg.Combo(values=self.f0_mode_list, key='f0_mode', default_value=self.f0_mode_list[2],
                               enable_events=True)],
                     [sg.Checkbox(text=i18n('启用增强器'), default=True, key='use_enhancer', enable_events=True),
                      sg.Checkbox(text=i18n('启用相位声码器'), default=False, key='use_phase_vocoder',
@@ -283,13 +283,13 @@ class GUI:
                 ], title=i18n('性能设置')),
                 sg.Frame(layout=[
                     [sg.Text(i18n("扩散模型文件"))],
-                    [sg.Input(key='diff_project', default_text='exp\\diffusion-test\\model_700000.pt'),
+                    [sg.Input(key='diff_project', default_text='exp\\diffusion-test\\model_400000.pt'),
                      sg.FileBrowse(i18n('选择模型文件'), key='choose_model')],
                     [sg.Text(i18n("扩散说话人id")), sg.Input(key='diff_spk_id', default_text='1', size=18)],
-                    [sg.Text(i18n("扩散深度")), sg.Input(key='k_step', default_text='100', size=18)],
-                    [sg.Text(i18n("扩散加速")), sg.Input(key='diff_acc', default_text='25', size=18)],
+                    [sg.Text(i18n("扩散深度")), sg.Input(key='k_step', default_text='120', size=18)],
+                    [sg.Text(i18n("扩散加速")), sg.Input(key='diff_acc', default_text='20', size=18)],
                     [sg.Checkbox(text=i18n('启用DPMs(推荐)'), default=False, key='diff_use_dpm', enable_events=True)],
-                    [sg.Checkbox(text=i18n('启用扩散'), default=False, key='diff_use', enable_events=True),
+                    [sg.Checkbox(text=i18n('启用扩散'), default=True, key='diff_use', enable_events=True),
                      sg.Checkbox(text=i18n('不扩散安全区(加速但损失效果)'), default=False, key='diff_silence', enable_events=True)]
                 ], title=i18n('扩散设置')),
             ],
@@ -326,6 +326,7 @@ class GUI:
                 print("prefix_pad_length:" + str(self.f_safe_prefix_pad_length))
                 print("mix_mode:" + str(self.config.spk_mix_dict))
                 print("enhancer:" + str(self.config.use_vocoder_based_enhancer))
+                print("diffusion:" + str(self.config.diff_use))
                 print('using_cuda:' + str(torch.cuda.is_available()))
                 self.start_vc()
             elif event == 'k_step':
@@ -440,7 +441,8 @@ class GUI:
             np.pi * torch.arange(0, 1, 1 / self.crossfade_frame, device=self.device) / 2) ** 2
         self.fade_out_window = 1 - self.fade_in_window
         self.svc_model.update_model(self.config.checkpoint_path)
-        self.diff_model.flush_model(self.config.diff_project, ddsp_config=self.svc_model.args)
+        if self.config.diff_use:
+            self.diff_model.flush_model(self.config.diff_project, ddsp_config=self.svc_model.args)
         thread_vc = threading.Thread(target=self.soundinput)
         thread_vc.start()
 

@@ -33,7 +33,7 @@ class DiffGtMel:
         return True
 
     def __call__(self, audio, f0, hubert, volume, acc=1, spk_id=1, k_step=0, use_dpm=True,
-                 spk_mix_dict=None, start_frame=None):
+                 spk_mix_dict=None, start_frame=0):
         input_mel = self.vocoder.extract(audio, self.args.data.sampling_rate)
         if use_dpm:
             method = 'dpm-solver'
@@ -49,30 +49,30 @@ class DiffGtMel:
             infer=True,
             infer_speedup=acc,
             method=method,
-            k_step=k_step)
-        if start_frame is not None:
+            k_step=k_step,
+            use_tqdm=False)
+        if start_frame > 0:
             out_mel = out_mel[:, start_frame:, :]
             f0 = f0[:, start_frame:, :]
         output = self.vocoder.infer(out_mel, f0)
-        if start_frame is not None:
-            output = F.pad(output, (int(np.round(self.vocoder.vocoder_sample_rate * (start_frame * self.vocoder.vocoder_hop_size / self.vocoder.vocoder_sample_rate))), 0))
+        if start_frame > 0:
+            output = F.pad(output, (start_frame * self.vocoder.vocoder_hop_size, 0))
         return output
 
     def infer(self, audio, f0, hubert, volume, acc=1, spk_id=1, k_step=0, use_dpm=True, silence_front=0,
               use_silence=False, spk_mix_dict=None):
         start_frame = int(silence_front * self.vocoder.vocoder_sample_rate / self.vocoder.vocoder_hop_size)
-        real_silence_front = start_frame * self.vocoder.vocoder_hop_size / self.vocoder.vocoder_sample_rate
         if use_silence:
-            audio = audio[:, int(np.round(real_silence_front * self.vocoder.vocoder_sample_rate)):]
+            audio = audio[:, start_frame * self.vocoder.vocoder_hop_size:]
             f0 = f0[:, start_frame:, :]
             hubert = hubert[:, start_frame:, :]
             volume = volume[:, start_frame:, :]
-            _start_frame = None
+            _start_frame = 0
         else:
             _start_frame = start_frame
         audio = self.__call__(audio, f0, hubert, volume, acc=acc, spk_id=spk_id, k_step=k_step,
                               use_dpm=use_dpm, spk_mix_dict=spk_mix_dict, start_frame=_start_frame)
         if use_silence:
             if start_frame > 0:
-                audio = F.pad(audio, (int(np.round(self.vocoder.vocoder_sample_rate * real_silence_front)), 0))
+                audio = F.pad(audio, (start_frame * self.vocoder.vocoder_hop_size, 0))
         return audio
