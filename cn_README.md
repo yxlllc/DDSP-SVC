@@ -88,7 +88,8 @@ data
 │    │    ├─ aaa.wav
 │    │    ├─ bbb.wav
 │    │    └─ ....wav
-│    └─ val
+├─ val
+│    ├─ audio
 │    │    ├─ eee.wav
 │    │    ├─ fff.wav
 │    │    └─ ....wav
