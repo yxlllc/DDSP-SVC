@@ -32,7 +32,7 @@ def parse_args(args=None, namespace=None):
         help="cpu or cuda, auto if not set")
     return parser.parse_args(args=args, namespace=namespace)
     
-def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = 'cuda'):
+def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = 'cuda', use_pitch_aug = False):
     
     path_srcdir  = os.path.join(path, 'audio')
     path_unitsdir  = os.path.join(path, 'units')
@@ -50,7 +50,10 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
         is_pure=True,
         is_sort=True,
         is_ext=True)
-        
+    
+    # pitch augmentation dictionary
+    pitch_aug_dict = {}
+    
     # run  
     def process(file):
         ext = file.split('.')[-1]
@@ -82,8 +85,12 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
             max_amp = float(torch.max(torch.abs(audio_t))) + 1e-5
             max_shift = min(1, np.log10(1/max_amp))
             log10_vol_shift = random.uniform(-1, max_shift)
+            if use_pitch_aug:
+                keyshift = random.uniform(-5, 5)
+            else:
+                keyshift = 0
             
-            aug_mel_t = mel_extractor.extract(audio_t * (10 ** log10_vol_shift), sample_rate)
+            aug_mel_t = mel_extractor.extract(audio_t * (10 ** log10_vol_shift), sample_rate, keyshift = keyshift)
             aug_mel = aug_mel_t.squeeze().to('cpu').numpy()
             aug_vol = volume_extractor.extract(audio * (10 ** log10_vol_shift))
             
@@ -107,6 +114,7 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
             os.makedirs(os.path.dirname(path_volumefile), exist_ok=True)
             np.save(path_volumefile, volume)
             if mel_extractor is not None:
+                pitch_aug_dict[file[:-(len(ext)+1)]] = keyshift
                 os.makedirs(os.path.dirname(path_melfile), exist_ok=True)
                 np.save(path_melfile, mel)
                 os.makedirs(os.path.dirname(path_augmelfile), exist_ok=True)
@@ -124,6 +132,9 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
     for file in tqdm(filelist, total=len(filelist)):
         process(file)
     
+    if mel_extractor is not None:
+        path_pitchaugdict = os.path.join(path, 'pitch_aug_dict.npy')
+        np.save(path_pitchaugdict, pitch_aug_dict)
     # multi-process (have bugs)
     '''
     with concurrent.futures.ProcessPoolExecutor(max_workers=2) as executor:
@@ -156,11 +167,14 @@ if __name__ == '__main__':
     
     # initialize mel extractor
     mel_extractor = None
+    use_pitch_aug = False
     if args.model.type == 'Diffusion':
         mel_extractor = Vocoder(args.vocoder.type, args.vocoder.ckpt, device = device)
         if mel_extractor.vocoder_sample_rate != sample_rate or mel_extractor.vocoder_hop_size != hop_size:
             mel_extractor = None
             print('Unmatch vocoder parameters, mel extraction is ignored!')
+        elif args.model.use_pitch_aug:
+            use_pitch_aug = True
     
     # initialize units encoder
     if args.data.encoder == 'cnhubertsoftfish':
@@ -176,8 +190,8 @@ if __name__ == '__main__':
                         device = device)    
     
     # preprocess training set
-    preprocess(args.data.train_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device)
+    preprocess(args.data.train_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device, use_pitch_aug = use_pitch_aug)
     
     # preprocess validation set
-    preprocess(args.data.valid_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device)
+    preprocess(args.data.valid_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device, use_pitch_aug = False)
     

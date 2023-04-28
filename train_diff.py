@@ -37,6 +37,7 @@ if __name__ == '__main__':
     model = Unit2Mel(
                 args.data.encoder_out_channels, 
                 args.model.n_spk,
+                args.model.use_pitch_aug,
                 vocoder.dimension,
                 args.model.n_layers,
                 args.model.n_chans,

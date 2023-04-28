@@ -107,7 +107,8 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
                     data[k] = data[k].to(args.device)
             
             # forward
-            loss = model(data['units'].float(), data['f0'], data['volume'], data['spk_id'], gt_spec=data['mel'].float(), infer=False)
+            loss = model(data['units'].float(), data['f0'], data['volume'], data['spk_id'], 
+                            aug_shift = data['aug_shift'], gt_spec=data['mel'].float(), infer=False)
             
             # handle nan loss
             if torch.isnan(loss):

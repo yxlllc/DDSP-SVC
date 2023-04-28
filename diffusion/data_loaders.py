@@ -116,6 +116,7 @@ class AudioDataset(Dataset):
         self.whole_audio = whole_audio
         self.use_aug = use_aug
         self.data_buffer={}
+        self.pitch_aug_dict = np.load(os.path.join(self.path_root, 'pitch_aug_dict.npy'), allow_pickle=True).item()
         if load_all_data:
             print('Load all the data from :', path_root)
         else:
@@ -135,7 +136,7 @@ class AudioDataset(Dataset):
             path_augvol = os.path.join(self.path_root, 'aug_vol', name) + '.npy'
             aug_vol = np.load(path_augvol)
             aug_vol = torch.from_numpy(aug_vol).float().unsqueeze(-1).to(device)
-            
+                        
             if n_spk is not None and n_spk > 1:
                 spk_id = int(os.path.dirname(name)) if str.isdigit(os.path.dirname(name)) else 0
                 if spk_id < 1 or spk_id > n_spk:
@@ -158,7 +159,6 @@ class AudioDataset(Dataset):
                 path_augmel = os.path.join(self.path_root, 'aug_mel', name) + '.npy'
                 aug_mel = np.load(path_augmel)
                 aug_mel = torch.from_numpy(aug_mel).to(device)
-                
                 
                 path_units = os.path.join(self.path_root, 'units', name) + '.npy'
                 units = np.load(path_units)
@@ -249,7 +249,10 @@ class AudioDataset(Dataset):
 
         # load f0
         f0 = data_buffer.get('f0')
-        f0_frames = f0[start_frame : start_frame + units_frame_len]
+        aug_shift = 0
+        if aug_flag:
+            aug_shift = self.pitch_aug_dict[name]
+        f0_frames = 2 ** (aug_shift / 12) * f0[start_frame : start_frame + units_frame_len]
         
         # load volume
         vol_key = 'aug_vol' if aug_flag else 'volume'
@@ -259,7 +262,10 @@ class AudioDataset(Dataset):
         # load spk_id
         spk_id = data_buffer.get('spk_id')
         
-        return dict(mel=mel, f0=f0_frames, volume=volume_frames, units=units, spk_id=spk_id, name=name)
+        # load shift
+        aug_shift = torch.LongTensor(np.array([[aug_shift]]))
+        
+        return dict(mel=mel, f0=f0_frames, volume=volume_frames, units=units, spk_id=spk_id, aug_shift=aug_shift, name=name)
 
     def __len__(self):
         return len(self.paths)

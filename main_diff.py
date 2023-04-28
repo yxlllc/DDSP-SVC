@@ -90,6 +90,14 @@ def parse_args(args=None, namespace=None):
         help="key changed (number of semitones) | default: 0",
     )
     parser.add_argument(
+        "-f",
+        "--formant_shift_key",
+        type=str,
+        required=False,
+        default=0,
+        help="formant changed (number of semitones) , only for pitch-augmented model| default: 0",
+    )
+    parser.add_argument(
         "-pe",
         "--pitch_extractor",
         type=str,
@@ -239,6 +247,9 @@ if __name__ == '__main__':
     # key change
     f0 = f0 * 2 ** (float(cmd.key) / 12)
     
+    # formant change
+    formant_shift_key = torch.LongTensor(np.array([[int(cmd.formant_shift_key)]])).to(device)
+    
     # extract volume 
     print('Extracting the volume envelope of the input audio...')
     volume_extractor = Volume_Extractor(hop_size)
@@ -339,6 +350,7 @@ if __name__ == '__main__':
                     seg_volume, 
                     spk_id = diff_spk_id, 
                     spk_mix_dict = spk_mix_dict,
+                    aug_shift = formant_shift_key,
                     gt_spec=seg_input_mel,
                     infer=True, 
                     infer_speedup=infer_speedup, 
