@@ -248,7 +248,7 @@ if __name__ == '__main__':
     f0 = f0 * 2 ** (float(cmd.key) / 12)
     
     # formant change
-    formant_shift_key = torch.LongTensor(np.array([[int(cmd.formant_shift_key)]])).to(device)
+    formant_shift_key = torch.LongTensor(np.array([[float(cmd.formant_shift_key)]])).to(device)
     
     # extract volume 
     print('Extracting the volume envelope of the input audio...')
@@ -337,8 +337,9 @@ if __name__ == '__main__':
             seg_f0 = f0[:, start_frame : start_frame + seg_units.size(1), :]
             seg_volume = volume[:, start_frame : start_frame + seg_units.size(1), :]
             if ddsp is not None:
-                seg_ddsp_output, _ , (_, _) = ddsp(seg_units, seg_f0, seg_volume, spk_id = spk_id, spk_mix_dict = spk_mix_dict)
-                seg_input_mel = vocoder.extract(seg_ddsp_output, args.data.sampling_rate)
+                seg_ddsp_f0 = 2 ** (-float(cmd.formant_shift_key) / 12) * seg_f0
+                seg_ddsp_output, _ , (_, _) = ddsp(seg_units, seg_ddsp_f0, seg_volume, spk_id = spk_id, spk_mix_dict = spk_mix_dict)
+                seg_input_mel = vocoder.extract(seg_ddsp_output, args.data.sampling_rate, keyshift=float(cmd.formant_shift_key))
             elif input_mel != None:
                 seg_input_mel = input_mel[:, start_frame : start_frame + seg_units.size(1), :]
             else:
