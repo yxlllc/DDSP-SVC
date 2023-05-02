@@ -58,7 +58,8 @@ def get_data_loaders(args, whole_audio=False):
         whole_audio=whole_audio,
         n_spk=args.model.n_spk,
         device=args.train.cache_device,
-        fp16=args.train.cache_fp16)
+        fp16=args.train.cache_fp16,
+        use_aug=True)
     loader_train = torch.utils.data.DataLoader(
         data_train ,
         batch_size=args.train.batch_size if not whole_audio else 1,
@@ -96,7 +97,8 @@ class AudioDataset(Dataset):
         whole_audio=False,
         n_spk=1,
         device = 'cpu',
-        fp16 = False
+        fp16 = False,
+        use_aug = False
     ):
         super().__init__()
         
@@ -112,6 +114,7 @@ class AudioDataset(Dataset):
             is_ext=False
         )
         self.whole_audio = whole_audio
+        self.use_aug = use_aug
         self.data_buffer={}
         if load_all_data:
             print('Load all the data from :', path_root)
@@ -224,7 +227,18 @@ class AudioDataset(Dataset):
         # load spk_id
         spk_id = data_buffer.get('spk_id')
         
-        return dict(audio=audio, f0=f0_frames, volume=volume_frames, units=units, spk_id=spk_id, name=name)
+        # volume augmentation
+        if self.use_aug:
+            max_amp = float(torch.max(torch.abs(audio))) + 1e-5
+            max_shift = min(1, np.log10(1/max_amp))
+            log10_vol_shift = random.uniform(-1, max_shift)
+            audio_aug = audio * (10 ** log10_vol_shift)
+            volume_frames_aug = volume_frames * (10 ** log10_vol_shift)
+        else:
+            audio_aug = audio
+            volume_frames_aug = volume_frames
+        
+        return dict(audio=audio_aug, f0=f0_frames, volume=volume_frames_aug, units=units, spk_id=spk_id, name=name)
 
     def __len__(self):
         return len(self.paths)
