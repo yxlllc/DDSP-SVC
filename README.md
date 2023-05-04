@@ -5,6 +5,42 @@ Language: **English** [简体中文](./cn_README.md) [한국어](./ko_README.md)
 </div>
 Real-time end-to-end singing voice conversion system based on DDSP (Differentiable Digital Signal Processing）.
 
+## （3.0 - Experimental）Shallow diffusion model （DDSP + Diff-SVC refactor version）
+Data preparation, configuring the pre-trained encoder (hubert or contentvec ) and vocoder (nsf-hifigan) is the same as training a pure DDSP model.
+
+Preprocessing：
+```bash
+python preprocess.py -c configs/diffusion.yaml
+```
+This preprocessing can also be used to train the DDSP model without preprocessing twice, but you need to ensure that the parameters under the 'data' tag in yaml are consistent.
+
+Train a diffusion model：
+```bash
+python train_diff.py -c configs/diffusion.yaml
+```
+Train a DDSP model：
+```bash
+python train.py -c configs/combsub.yaml
+```
+As mentioned above, re-preprocessing is not required, but please check whether the parameters of combsub.yaml and diffusion.yaml match. The number of speakers n_spk can be inconsistent, but try to use the same number to represent the same speaker (this makes inference easier).
+
+Non-real-time inference：
+```bash
+python main_diff.py -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+```
+'speedup' is the acceleration speed, 'method' is 'pndm' or 'dpm-solver', 'kstep' is the number of shallow diffusion steps, 'diffid' is the speaker id of the diffusion model, and other parameters have the same meaning as 'main.py'.
+
+If the same id has been used to represent the same speaker during training, '-diffid' can be empty, otherwise the '-diffid' option needs to be specified.
+
+If '-ddsp' is empty, the pure diffusion model is used, at this time, shallow diffusion is performed with the mel of the input source, and if further -kstep is empty, full-depth Gaussian diffusion is performed.
+
+The program will automatically check whether the parameters of the DDSP model and the diffusion model match (sampling rate, hop size and encoder), and if they do not match, it will ignore loading the DDSP model and enter Gaussian diffusion mode.
+
+Real-time GUI：
+```bash
+python gui_diff.py
+```
+
 ## 0. Introduction
 DDSP-SVC is a new open source singing voice conversion project dedicated to the development of free AI voice changer software that can be popularized on personal computers.
 
