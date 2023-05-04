@@ -118,18 +118,26 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
                     data[k] = data[k].to(args.device)
             
             # forward
-            with autocast(device_type=args.device, dtype=dtype):
-                loss = model(data['units'], data['f0'], data['volume'], data['spk_id'], 
-                                aug_shift = data['aug_shift'], gt_spec=data['mel'], infer=False)
+            if dtype == torch.float32:
+                loss = model(data['units'].float(), data['f0'], data['volume'], data['spk_id'], 
+                                aug_shift = data['aug_shift'], gt_spec=data['mel'].float(), infer=False)
+            else:
+                with autocast(device_type=args.device, dtype=dtype):
+                    loss = model(data['units'], data['f0'], data['volume'], data['spk_id'], 
+                                    aug_shift = data['aug_shift'], gt_spec=data['mel'], infer=False)
             
             # handle nan loss
             if torch.isnan(loss):
                 raise ValueError(' [x] nan loss ')
             else:
                 # backpropagate
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
+                if dtype == torch.float32:
+                    loss.backward()
+                    optimizer.step()
+                else:
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
                 scheduler.step()
                 
             # log loss
