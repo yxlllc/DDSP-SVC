@@ -412,7 +412,7 @@ class Audio2HubertLarge1024L24():
             inputs = {
                 "source": audio.to(self.device),
                 "padding_mask": padding_mask.to(self.device),
-                "output_layer": 12,  # layer 12
+                "output_layer": 24,  # layer 24
             }
             logits = self.hubert.extract_features(**inputs)
             units = logits[0]
