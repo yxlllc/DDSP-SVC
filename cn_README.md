@@ -7,6 +7,7 @@ Language: [English](./README.md) **简体中文**
 
 ## （3.0 - 实验性）浅扩散模型 （DDSP + Diff-SVC 重构版）
 数据准备，配置编码器与声码器的环节与训练纯 DDSP 模型相同。
+
 预处理：
 ```bash
 python preprocess.py -c configs/diffusion.yaml
