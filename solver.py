@@ -76,7 +76,6 @@ def train(args, initial_global_step, model, optimizer, loss_func, loader_train, 
     saver.log_info(params_count)
     
     # run
-    best_loss = np.inf
     num_batches = len(loader_train)
     model.train()
     saver.log_info('======= start training =======')
@@ -125,27 +124,25 @@ def train(args, initial_global_step, model, optimizer, loss_func, loader_train, 
             
             # validation
             if saver.global_step % args.train.interval_val == 0:
+                optimizer_save = optimizer if args.train.save_opt else None
+                    
                 # save latest
-                saver.save_model(model, optimizer, postfix=f'{saver.global_step}')
+                saver.save_model(model, optimizer_save, postfix=f'{saver.global_step}')
 
                 # run testing set
                 test_loss = test(args, model, loss_func, loader_test, saver)
-             
+                
+                # log loss
                 saver.log_info(
                     ' --- <validation> --- \nloss: {:.3f}. '.format(
                         test_loss,
                     )
                 )
-                
+    
                 saver.log_value({
                     'validation/loss': test_loss
                 })
+                
                 model.train()
-
-                # save best model
-                if test_loss < best_loss:
-                    saver.log_info(' [V] best model updated.')
-                    saver.save_model(model, optimizer, postfix='best')
-                    best_loss = test_loss
 
                           

@@ -146,16 +146,18 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
             
             # validation
             if saver.global_step % args.train.interval_val == 0:
+                optimizer_save = optimizer if args.train.save_opt else None
+                
                 # save latest
-                saver.save_model(model, optimizer, postfix=f'{saver.global_step}')
+                saver.save_model(model, optimizer_save, postfix=f'{saver.global_step}')
                 last_val_step = saver.global_step - args.train.interval_val
                 if last_val_step % args.train.interval_force_save != 0:
                     saver.delete_model(postfix=f'{last_val_step}')
                 
                 # run testing set
-                
                 test_loss = test(args, model, vocoder, loader_test, saver)
-             
+                
+                # log loss
                 saver.log_info(
                     ' --- <validation> --- \nloss: {:.3f}. '.format(
                         test_loss,
