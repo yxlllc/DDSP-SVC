@@ -6,6 +6,8 @@ Language: **English** [简体中文](./cn_README.md) [한국어](./ko_README.md)
 Real-time end-to-end singing voice conversion system based on DDSP (Differentiable Digital Signal Processing）.
 
 ## （3.0 - Experimental）Shallow diffusion model （DDSP + Diff-SVC refactor version）
+![Diagram](diagram.png)
+
 Data preparation, configuring the pre-trained encoder (hubert or contentvec ) and vocoder (nsf-hifigan) is the same as training a pure DDSP model.
 
 Preprocessing：
