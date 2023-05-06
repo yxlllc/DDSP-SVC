@@ -10,31 +10,40 @@ Real-time end-to-end singing voice conversion system based on DDSP (Differentiab
 
 Data preparation, configuring the pre-trained encoder (hubert or contentvec ) and vocoder (nsf-hifigan) is the same as training a pure DDSP model.
 
-Preprocessing：
+Because the diffusion model is more difficult to train, we provide some pre-trained models here:
+
+https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/hubertsoft_pitch_410k/model_0.pt (using 'hubertsoft' encoder)
+
+https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/pitch_400k/model_0.pt (using 'contentvec768l12' encoder)
+
+Move the `model_0.pt` to the model export folder specified by the 'expdir' parameter in `diffusion.yaml`, and the program will automatically load the pre-trained models in that folder.
+
+(1) Preprocessing：
 ```bash
 python preprocess.py -c configs/diffusion.yaml
 ```
-This preprocessing can also be used to train the DDSP model without preprocessing twice, but you need to ensure that the parameters under the 'data' tag in yaml are consistent.
+This preprocessing can also be used to train the DDSP model without preprocessing twice, but you need to ensure that the parameters under the 'data' tag in yaml files are consistent.
 
-Train a diffusion model：
+(2) Train a diffusion model：
 ```bash
 python train_diff.py -c configs/diffusion.yaml
 ```
-Train a DDSP model：
+(3) Train a DDSP model：
 ```bash
 python train.py -c configs/combsub.yaml
 ```
-As mentioned above, re-preprocessing is not required, but please check whether the parameters of combsub.yaml and diffusion.yaml match. The number of speakers n_spk can be inconsistent, but try to use the same number to represent the same speaker (this makes inference easier).
+As mentioned above, re-preprocessing is not required, but please check whether the parameters of `combsub.yaml` and `diffusion.yaml` match. The number of speakers 'n_spk' can be inconsistent, but try to use the same number to represent the same speaker (this makes inference easier).
 
-Non-real-time inference：
+(4) Non-real-time inference：
 ```bash
 python main_diff.py -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
 ```
-'speedup' is the acceleration speed, 'method' is 'pndm' or 'dpm-solver', 'kstep' is the number of shallow diffusion steps, 'diffid' is the speaker id of the diffusion model, and other parameters have the same meaning as 'main.py'.
+
+'speedup' is the acceleration speed, 'method' is 'pndm' or 'dpm-solver', 'kstep' is the number of shallow diffusion steps, 'diffid' is the speaker id of the diffusion model, and other parameters have the same meaning as `main.py`.
 
 If the same id has been used to represent the same speaker during training, '-diffid' can be empty, otherwise the '-diffid' option needs to be specified.
 
-If '-ddsp' is empty, the pure diffusion model is used, at this time, shallow diffusion is performed with the mel of the input source, and if further -kstep is empty, full-depth Gaussian diffusion is performed.
+If '-ddsp' is empty, the pure diffusion model is used, at this time, shallow diffusion is performed with the mel of the input source, and if further '-kstep' is empty, full-depth Gaussian diffusion is performed.
 
 The program will automatically check whether the parameters of the DDSP model and the diffusion model match (sampling rate, hop size and encoder), and if they do not match, it will ignore loading the DDSP model and enter Gaussian diffusion mode.
 

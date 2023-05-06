@@ -8,25 +8,33 @@ Language: [English](./README.md) **简体中文**
 ## （3.0 - 实验性）浅扩散模型 （DDSP + Diff-SVC 重构版）
 ![Diagram](diagram.png)
 
-数据准备，配置编码器与声码器的环节与训练纯 DDSP 模型相同。
+数据准备，配置编码器（hubert 或者 contentvec ) 与声码器 (nsf-hifigan) 的环节与训练纯 DDSP 模型相同。
 
-预处理：
+因为扩散模型更难训练，我们提供了一些预训练模型：
+
+https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/hubertsoft_pitch_410k/model_0.pt (使用 'hubertsoft' 编码器)
+
+https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/pitch_400k/model_0.pt (使用 'contentvec768l12' 编码器)
+
+将名为`model_0.pt`的预训练模型, 放到`diffusion.yaml`里面 "expdir: exp/*****" 参数指定的模型导出文件夹内, 没有就新建一个, 程序会自动加载该文件夹下的预训练模型。
+
+（1）预处理：
 ```bash
 python preprocess.py -c configs/diffusion.yaml
 ```
 这个预处理也能用来训练 DDSP 模型，不用预处理两遍（但需要保证 yaml 里面的 data 下面的参数均一致）
 
-训练扩散模型：
+（2）训练扩散模型：
 ```bash
 python train_diff.py -c configs/diffusion.yaml
 ```
-训练 DDSP 模型：
+（3）训练 DDSP 模型：
 ```bash
 python train.py -c configs/combsub.yaml
 ```
 如上所述，可以不需要重新预处理，但请检查 combsub.yaml 与 diffusion.yaml 是否参数匹配。说话人数 n_spk 可以不一致，但是尽量用相同的编号表示相同的说话人（推理更简单）。
 
-非实时推理：
+（4）非实时推理：
 ```bash
 python main_diff.py -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
 ```
@@ -38,11 +46,10 @@ speedup 为加速倍速，method 为 pndm 或者 dpm-solver, kstep为浅扩散�
 
 程序会自动检查 DDSP 模型和扩散模型的参数是否匹配 （采样率，帧长和编码器），不匹配会忽略加载 DDSP 模型并进入高斯扩散模式。
 
-实时 GUI :
+（5）实时 GUI :
 ```bash
 python gui_diff.py
 ```
-
 
 ## 0.简介
 DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个人电脑上普及的自由 AI 变声器软件。
