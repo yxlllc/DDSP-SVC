@@ -169,8 +169,8 @@ class Units_Encoder:
             audio_res = self.resample_kernel[key_str](audio)
         
         # encode
-        if audio_res.size(-1) < self.encoder_hop_size:
-            audio_res = torch.nn.functional.pad(audio, (0, self.encoder_hop_size - audio_res.size(-1)))
+        if audio_res.size(-1) < 400:
+            audio_res = torch.nn.functional.pad(audio, (0, 400 - audio_res.size(-1)))
         units = self.model(audio_res)
         
         # alignment
