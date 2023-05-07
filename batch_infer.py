@@ -14,6 +14,46 @@ from ddsp.core import upsample
 from diffusion.unit2mel import load_model_vocoder
 from tqdm import tqdm
 
+def traverse_dir(
+        root_dir,
+        extension,
+        amount=None,
+        str_include=None,
+        str_exclude=None,
+        is_pure=False,
+        is_sort=False,
+        is_ext=True):
+
+    file_list = []
+    cnt = 0
+    for root, _, files in os.walk(root_dir):
+        for file in files:
+            if file.endswith(extension):
+                # path
+                mix_path = os.path.join(root, file)
+                pure_path = mix_path[len(root_dir)+1:] if is_pure else mix_path
+
+                # amount
+                if (amount is not None) and (cnt == amount):
+                    if is_sort:
+                        file_list.sort()
+                    return file_list
+                
+                # check string
+                if (str_include is not None) and (str_include not in pure_path):
+                    continue
+                if (str_exclude is not None) and (str_exclude in pure_path):
+                    continue
+                
+                if not is_ext:
+                    ext = pure_path.split('.')[-1]
+                    pure_path = pure_path[:-(len(ext)+1)]
+                file_list.append(pure_path)
+                cnt += 1
+    if is_sort:
+        file_list.sort()
+    return file_list
+    
 def check_args(ddsp_args, diff_args):
     if ddsp_args.data.sampling_rate != diff_args.data.sampling_rate:
         print("Unmatch data.sampling_rate!")
@@ -56,14 +96,14 @@ def parse_args(args=None, namespace=None):
         "--input",
         type=str,
         required=True,
-        help="path to the input audio file",
+        help="path to the input audio directory",
     )
     parser.add_argument(
         "-o",
         "--output",
         type=str,
         required=True,
-        help="path to the output audio file",
+        help="path to the output audio directory",
     )
     parser.add_argument(
         "-id",
@@ -163,57 +203,17 @@ def parse_args(args=None, namespace=None):
     )
     return parser.parse_args(args=args, namespace=namespace)
 
-    
-def split(audio, sample_rate, hop_size, db_thresh = -40, min_len = 5000):
-    slicer = Slicer(
-                sr=sample_rate,
-                threshold=db_thresh,
-                min_length=min_len)       
-    chunks = dict(slicer.slice(audio))
-    result = []
-    for k, v in chunks.items():
-        tag = v["split_time"].split(",")
-        if tag[0] != tag[1]:
-            start_frame = int(int(tag[0]) // hop_size)
-            end_frame = int(int(tag[1]) // hop_size)
-            if end_frame > start_frame:
-                result.append((
-                        start_frame, 
-                        audio[int(start_frame * hop_size) : int(end_frame * hop_size)]))
-    return result
 
-
-def cross_fade(a: np.ndarray, b: np.ndarray, idx: int):
-    result = np.zeros(idx + b.shape[0])
-    fade_len = a.shape[0] - idx
-    np.copyto(dst=result[:idx], src=a[:idx])
-    k = np.linspace(0, 1.0, num=fade_len, endpoint=True)
-    result[idx: a.shape[0]] = (1 - k) * a[idx:] + k * b[: fade_len]
-    np.copyto(dst=result[a.shape[0]:], src=b[fade_len:])
-    return result
-
-
-if __name__ == '__main__':
-    # parse commands
-    cmd = parse_args()
-    
-    #device = 'cpu' 
-    device = cmd.device
-    if device is None:
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
-    # load diffusion model
-    model, vocoder, args = load_model_vocoder(cmd.diff_ckpt, device=device)
-    
+def infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, units_encoder):    
     # load input
-    audio, sample_rate = librosa.load(cmd.input, sr=None)
+    audio, sample_rate = librosa.load(input_path, sr=None)
     if len(audio.shape) > 1:
         audio = librosa.to_mono(audio)
     hop_size = args.data.block_size * sample_rate / args.data.sampling_rate
     
     # get MD5 hash from wav file
     md5_hash = ""
-    with open(cmd.input, 'rb') as f:
+    with open(input_path, 'rb') as f:
         data = f.read()
         md5_hash = hashlib.md5(data).hexdigest()
         print("MD5: " + md5_hash)
@@ -261,18 +261,8 @@ if __name__ == '__main__':
     mask = upsample(mask, args.data.block_size).squeeze(-1)
     volume = torch.from_numpy(volume).float().to(device).unsqueeze(-1).unsqueeze(0)
     
-    # load units encoder
-    if args.data.encoder == 'cnhubertsoftfish':
-        cnhubertsoft_gate = args.data.cnhubertsoft_gate
-    else:
-        cnhubertsoft_gate = 10
-    units_encoder = Units_Encoder(
-                        args.data.encoder, 
-                        args.data.encoder_ckpt, 
-                        args.data.encoder_sample_rate, 
-                        args.data.encoder_hop_size,
-                        cnhubertsoft_gate=cnhubertsoft_gate,
-                        device = device)
+    input = torch.from_numpy(audio).float().unsqueeze(0).to(device)
+    units = units_encoder.encode(input, sample_rate, hop_size)
                             
     # speaker id or mix-speaker dictionary
     spk_mix_dict = literal_eval(cmd.spk_mix_dict)
@@ -302,19 +292,12 @@ if __name__ == '__main__':
     else:
         print('Sampling method: DDPM')
     
-    ddsp = None
     input_mel = None
     k_step = None
     if cmd.k_step is not None:
         k_step = int(cmd.k_step)
         print('Shallow diffusion step: ' + str(k_step))
-        if cmd.ddsp_ckpt is not None:
-            # load ddsp model
-            ddsp, ddsp_args = load_model(cmd.ddsp_ckpt, device=device)
-            if not check_args(ddsp_args, args):
-                print("Cannot use this DDSP model for shallow diffusion, gaussian diffusion will be used!")
-                ddsp = None
-        else:
+        if ddsp is None:
             print('DDSP model is not identified!')
             print('Extracting the mel spectrum of the input audio for shallow diffusion...')
             audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(device)
@@ -323,50 +306,71 @@ if __name__ == '__main__':
     else:
         print('Shallow diffusion step is not identified, gaussian diffusion will be used!')
         
-    # forward and save the output
-    result = np.zeros(0)
-    current_length = 0
-    segments = split(audio, sample_rate, hop_size)
-    print('Cut the input audio into ' + str(len(segments)) + ' slices')
     with torch.no_grad():
-        for segment in tqdm(segments):
-            start_frame = segment[0]
-            seg_input = torch.from_numpy(segment[1]).float().unsqueeze(0).to(device)
-            seg_units = units_encoder.encode(seg_input, sample_rate, hop_size)
-           
-            seg_f0 = f0[:, start_frame : start_frame + seg_units.size(1), :]
-            seg_volume = volume[:, start_frame : start_frame + seg_units.size(1), :]
-            if ddsp is not None:
-                seg_ddsp_f0 = 2 ** (-float(cmd.formant_shift_key) / 12) * seg_f0
-                seg_ddsp_output, _ , (_, _) = ddsp(seg_units, seg_ddsp_f0, seg_volume, spk_id = spk_id, spk_mix_dict = spk_mix_dict)
-                seg_input_mel = vocoder.extract(seg_ddsp_output, args.data.sampling_rate, keyshift=float(cmd.formant_shift_key))
-            elif input_mel != None:
-                seg_input_mel = input_mel[:, start_frame : start_frame + seg_units.size(1), :]
-            else:
-                seg_input_mel = None
-                
-            seg_mel = model(
-                    seg_units, 
-                    seg_f0, 
-                    seg_volume, 
+        if ddsp is not None:
+            ddsp_f0 = 2 ** (-float(cmd.formant_shift_key) / 12) * f0
+            ddsp_output, _ , (_, _) = ddsp(units, ddsp_f0, volume, spk_id = spk_id, spk_mix_dict = spk_mix_dict)
+            input_mel = vocoder.extract(ddsp_output, args.data.sampling_rate, keyshift=float(cmd.formant_shift_key))
+        mel = model(
+                    units, 
+                    f0, 
+                    volume, 
                     spk_id = diff_spk_id, 
                     spk_mix_dict = spk_mix_dict,
                     aug_shift = formant_shift_key,
-                    gt_spec=seg_input_mel,
+                    gt_spec=input_mel,
                     infer=True, 
                     infer_speedup=infer_speedup, 
                     method=method,
                     k_step=k_step)
-            seg_output = vocoder.infer(seg_mel, seg_f0)
-            seg_output *= mask[:, start_frame * args.data.block_size : (start_frame + seg_units.size(1)) * args.data.block_size]
-            seg_output = seg_output.squeeze().cpu().numpy()
-            
-            silent_length = round(start_frame * args.data.block_size) - current_length
-            if silent_length >= 0:
-                result = np.append(result, np.zeros(silent_length))
-                result = np.append(result, seg_output)
-            else:
-                result = cross_fade(result, seg_output, current_length + silent_length)
-            current_length = current_length + silent_length + len(seg_output)
-        sf.write(cmd.output, result, args.data.sampling_rate)
+        output = vocoder.infer(mel, f0)
+        output *= mask
+        output = output.squeeze().cpu().numpy()
+        sf.write(output_path, output, args.data.sampling_rate)
+
+
+if __name__ == '__main__':
+    # parse commands
+    cmd = parse_args()
     
+    # device
+    device = cmd.device
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+               
+    # load diffusion model
+    model, vocoder, args = load_model_vocoder(cmd.diff_ckpt, device=device)
+    
+    # load ddsp model
+    ddsp = None
+    if cmd.k_step is not None and cmd.ddsp_ckpt is not None:
+        ddsp, ddsp_args = load_model(cmd.ddsp_ckpt, device=device)
+        if not check_args(ddsp_args, args):
+            print("Cannot use this DDSP model for shallow diffusion, gaussian diffusion will be used!")
+            ddsp = None
+            
+    # load units encoder
+    if args.data.encoder == 'cnhubertsoftfish':
+        cnhubertsoft_gate = args.data.cnhubertsoft_gate
+    else:
+        cnhubertsoft_gate = 10
+    units_encoder = Units_Encoder(
+                        args.data.encoder, 
+                        args.data.encoder_ckpt, 
+                        args.data.encoder_sample_rate, 
+                        args.data.encoder_hop_size,
+                        cnhubertsoft_gate=cnhubertsoft_gate,
+                        device = device)
+    wav_paths = traverse_dir(
+            cmd.input,
+            extension='wav',
+            is_pure=True,
+            is_sort=True,
+            is_ext=True
+        )
+    for path in wav_paths:
+        input_path = os.path.join(cmd.input, path)
+        output_path = os.path.join(cmd.output, path)
+        print('_______________________________')
+        print('Input: ' + input_path)
+        infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, units_encoder)
