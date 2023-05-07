@@ -318,7 +318,7 @@ def infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, unit
                     spk_id = diff_spk_id, 
                     spk_mix_dict = spk_mix_dict,
                     aug_shift = formant_shift_key,
-                    gt_spec=input_mel,
+                    gt_spec=input_mel[:,:units.size(1)],
                     infer=True, 
                     infer_speedup=infer_speedup, 
                     method=method,
