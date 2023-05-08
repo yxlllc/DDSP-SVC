@@ -125,7 +125,9 @@ data
 │    │    │   ├─ ddd.wav
 │    │    │   └─ ....wav
 │    │    └─ ...
-│    └─ val
+|
+├─ val
+|    ├─ audio
 │    │    ├─ 1
 │    │    │   ├─ eee.wav
 │    │    │   ├─ fff.wav
