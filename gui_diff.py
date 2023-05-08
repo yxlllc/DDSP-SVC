@@ -91,7 +91,7 @@ class SvcDDSP:
               diff_acc=None,
               diff_spk_id=None,
               diff_use=False,
-              diff_use_dpm=False,
+              diff_method='pndm',
               k_step=None,
               diff_silence=False,
               audio_alignment=False
@@ -145,7 +145,7 @@ class SvcDDSP:
             output, _, (s_h, s_n) = self.model(units, f0, volume, spk_id=spk_id, spk_mix_dict=dictionary)
             if diff_use and diff_model is not None:
                 output = diff_model.infer(output, f0, units, volume, acc=diff_acc, spk_id=diff_spk_id,
-                                          k_step=k_step, use_dpm=diff_use_dpm, silence_front=silence_front, use_silence=diff_silence,
+                                          k_step=k_step, method=diff_method, silence_front=silence_front, use_silence=diff_silence,
                                           spk_mix_dict=dictionary)
             output *= mask
             if use_enhancer and not diff_use:
@@ -186,7 +186,7 @@ class Config:
         self.diff_acc = 10
         self.diff_spk_id = 0
         self.k_step = 100
-        self.diff_use_dpm = False
+        self.diff_method = 'pndm'
         self.diff_silence = False
 
     def save(self, path):
@@ -222,6 +222,7 @@ class GUI:
         self.output_wav: np.ndarray = None  # 输出音频规范化后的保存地址
         self.sola_buffer: torch.Tensor = None  # 保存上一个output的crossfade
         self.f0_mode_list = ["parselmouth", "dio", "harvest", "crepe"]  # F0预测器
+        self.diff_method_list = ["pndm", "dpm-solver"] # 加速采样方法
         self.f_safe_prefix_pad_length: float = 0.0
         self.resample_kernel = {}
         self.launcher()  # start
@@ -272,12 +273,12 @@ class GUI:
                      sg.Slider(range=(0.01, 0.15), orientation='h', key='crossfade', resolution=0.01,
                                default_value=0.04, enable_events=True)],
                     [sg.Text(i18n("使用历史区块数量")),
-                     sg.Slider(range=(1, 20), orientation='h', key='buffernum', resolution=1, default_value=3,
+                     sg.Slider(range=(1, 20), orientation='h', key='buffernum', resolution=1, default_value=4,
                                enable_events=True)],
                     [sg.Text(i18n("f0预测模式")),
                      sg.Combo(values=self.f0_mode_list, key='f0_mode', default_value=self.f0_mode_list[2],
                               enable_events=True)],
-                    [sg.Checkbox(text=i18n('启用增强器'), default=True, key='use_enhancer', enable_events=True),
+                    [sg.Checkbox(text=i18n('启用增强器'), default=False, key='use_enhancer', enable_events=True),
                      sg.Checkbox(text=i18n('启用相位声码器'), default=False, key='use_phase_vocoder',
                                  enable_events=True)]
                 ], title=i18n('性能设置')),
@@ -286,9 +287,11 @@ class GUI:
                     [sg.Input(key='diff_project', default_text='exp\\diffusion-test\\model_400000.pt'),
                      sg.FileBrowse(i18n('选择模型文件'), key='choose_model')],
                     [sg.Text(i18n("扩散说话人id")), sg.Input(key='diff_spk_id', default_text='1', size=18)],
-                    [sg.Text(i18n("扩散深度")), sg.Input(key='k_step', default_text='120', size=18)],
+                    [sg.Text(i18n("扩散深度")), sg.Input(key='k_step', default_text='200', size=18)],
                     [sg.Text(i18n("扩散加速")), sg.Input(key='diff_acc', default_text='20', size=18)],
-                    [sg.Checkbox(text=i18n('启用DPMs(推荐)'), default=False, key='diff_use_dpm', enable_events=True)],
+                    [sg.Text(i18n("扩散算法")),
+                     sg.Combo(values=self.diff_method_list, key='diff_method', default_value=self.diff_method_list[1],
+                              enable_events=True)],
                     [sg.Checkbox(text=i18n('启用扩散'), default=True, key='diff_use', enable_events=True),
                      sg.Checkbox(text=i18n('不扩散安全区(加速但损失效果)'), default=False, key='diff_silence', enable_events=True)]
                 ], title=i18n('扩散设置')),
@@ -347,8 +350,8 @@ class GUI:
                 self.config.use_vocoder_based_enhancer=False
             elif event == 'diff_silence':
                 self.config.diff_silence = values['diff_silence']
-            elif event == 'diff_use_dpm':
-                self.config.diff_use_dpm = values['diff_use_dpm']
+            elif event == 'diff_method':
+                self.config.diff_method = values['diff_method']
             elif event == 'spk_id':
                 self.config.spk_id = int(values['spk_id'])
             elif event == 'threhold':
@@ -395,7 +398,7 @@ class GUI:
         self.config.use_spk_mix = values['spk_mix']
         self.config.diff_use = values['diff_use']
         self.config.diff_silence = values['diff_silence']
-        self.config.diff_use_dpm = values['diff_use_dpm']
+        self.config.diff_method = values['diff_method']
         self.config.diff_project = values['diff_project']
         self.config.diff_acc = int(values['diff_acc'])
         self.config.diff_spk_id = int(values['diff_spk_id'])
@@ -425,7 +428,7 @@ class GUI:
         self.window['use_enhancer'].update(self.config.use_vocoder_based_enhancer)
         self.window['diff_use'].update(self.config.diff_use)
         self.window['diff_silence'].update(self.config.diff_silence)
-        self.window['diff_use_dpm'].update(self.config.diff_use_dpm)
+        self.window['diff_method'].update(self.config.diff_method)
         self.window['diff_project'].update(self.config.diff_project)
         self.window['diff_acc'].update(self.config.diff_acc)
         self.window['diff_spk_id'].update(self.config.diff_spk_id)
@@ -486,7 +489,7 @@ class GUI:
             diff_acc=self.config.diff_acc,
             diff_spk_id=self.config.diff_spk_id,
             diff_use=self.config.diff_use,
-            diff_use_dpm=self.config.diff_use_dpm,
+            diff_method=self.config.diff_method,
             k_step=self.config.k_step,
             diff_silence=self.config.diff_silence
         )
