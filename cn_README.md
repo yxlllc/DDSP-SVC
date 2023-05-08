@@ -105,7 +105,7 @@ data
 │    │    ├─ aaa.wav
 │    │    ├─ bbb.wav
 │    │    └─ ....wav
-│    └─ val
+│    ├─ val
 │    │    ├─ eee.wav
 │    │    ├─ fff.wav
 │    │    └─ ....wav
