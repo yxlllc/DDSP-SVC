@@ -46,7 +46,7 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
     # list files
     filelist =  traverse_dir(
         path_srcdir,
-        extension='wav',
+        extension=['wav', 'flac', 'mp3'],
         is_pure=True,
         is_sort=True,
         is_ext=True)
