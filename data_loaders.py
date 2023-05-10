@@ -1,5 +1,6 @@
 import os
 import random
+import re
 import numpy as np
 import librosa
 import torch
@@ -9,7 +10,7 @@ from torch.utils.data import Dataset
 
 def traverse_dir(
         root_dir,
-        extension,
+        extensions,
         amount=None,
         str_include=None,
         str_exclude=None,
@@ -21,7 +22,7 @@ def traverse_dir(
     cnt = 0
     for root, _, files in os.walk(root_dir):
         for file in files:
-            if file.endswith(extension):
+            if any([file.endswith(f".{ext}") for ext in extensions]):
                 # path
                 mix_path = os.path.join(root, file)
                 pure_path = mix_path[len(root_dir)+1:] if is_pure else mix_path
@@ -56,6 +57,7 @@ def get_data_loaders(args, whole_audio=False):
         sample_rate=args.data.sampling_rate,
         load_all_data=args.train.cache_all_data,
         whole_audio=whole_audio,
+        extensions=args.data.extensions,
         n_spk=args.model.n_spk,
         device=args.train.cache_device,
         fp16=args.train.cache_fp16,
@@ -75,6 +77,7 @@ def get_data_loaders(args, whole_audio=False):
         sample_rate=args.data.sampling_rate,
         load_all_data=args.train.cache_all_data,
         whole_audio=True,
+        extensions=args.data.extensions,
         n_spk=args.model.n_spk)
     loader_valid = torch.utils.data.DataLoader(
         data_valid,
@@ -95,6 +98,7 @@ class AudioDataset(Dataset):
         sample_rate,
         load_all_data=True,
         whole_audio=False,
+        extensions=['wav'],
         n_spk=1,
         device = 'cpu',
         fp16 = False,
@@ -108,7 +112,7 @@ class AudioDataset(Dataset):
         self.path_root = path_root
         self.paths = traverse_dir(
             os.path.join(path_root, 'audio'),
-            extension='wav',
+            extensions=extensions,
             is_pure=True,
             is_sort=True,
             is_ext=False
@@ -133,7 +137,8 @@ class AudioDataset(Dataset):
             volume = torch.from_numpy(volume).float().unsqueeze(-1).to(device)
             
             if n_spk is not None and n_spk > 1:
-                spk_id = int(os.path.dirname(name)) if str.isdigit(os.path.dirname(name)) else 0
+                dirname_split = re.split(r"_|\-", os.path.dirname(name), 2)[0]
+                spk_id = int(dirname_split) if str.isdigit(dirname_split) else 0
                 if spk_id < 1 or spk_id > n_spk:
                     raise ValueError(' [x] Muiti-speaker traing error : spk_id must be a positive integer from 1 to n_spk ')
             else:

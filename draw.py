@@ -1,9 +1,11 @@
+import argparse
 import numpy as np
 import tqdm
 import matplotlib.pyplot as plt
 import os
 import shutil
-import wave
+
+import soundfile as sf
 
 WAV_MIN_LENGTH = 2    # wav文件的最短时长 / The minimum duration of wav files
 SAMPLE_RATE = 1    # 抽取文件数量的百分比 / The percentage of files to be extracted
@@ -11,13 +13,43 @@ SAMPLE_MIN = 2    # 抽取的文件数量下限 / The lower limit of the number 
 SAMPLE_MAX = 10    # 抽取的文件数量上限 / The upper limit of the number of files to be extracted
 
 
+def parse_args(args=None, namespace=None):
+    """Parse command-line arguments."""
+    root_dir = os.path.abspath('.')
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-t",
+        "--train",
+        type=str,
+        default=root_dir + "/data/train/audio", # 固定源目录为根目录下/data/train/audio目录
+        help="directory where contains train dataset"
+    )
+    parser.add_argument(
+        "-v",
+        "--val",
+        type=str,
+        default=root_dir + "/data/val/audio",
+        help="directory where contains validate dataset"
+    )
+    parser.add_argument(
+        "-e",
+        "--extensions",
+        type=str,
+        required=False,
+        nargs="*",
+        default=["wav", "flac"],
+        help="list of using file extensions, e.g.) -f wav flac ..."
+    )
+    return parser.parse_args(args=args, namespace=namespace)
+
+
 # 定义一个函数，用于检查wav文件的时长是否大于最短时长
 def check_duration(wav_file):
     # 打开wav文件
-    f = wave.open(wav_file, "rb")
+    f = sf.SoundFile(wav_file)
     # 获取帧数和帧率
-    frames = f.getnframes()
-    rate = f.getframerate()
+    frames = f.frames
+    rate = f.samplerate
     # 计算时长（秒）
     duration = frames / float(rate)
     # 关闭文件
@@ -26,7 +58,7 @@ def check_duration(wav_file):
     return duration > WAV_MIN_LENGTH
 
 # 定义一个函数，用于从给定的目录中随机抽取一定比例的wav文件，并剪切到另一个目录中，保留数据结构
-def split_data(src_dir, dst_dir, ratio):
+def split_data(src_dir, dst_dir, ratio, extensions):
     # 创建目标目录（如果不存在）
     if not os.path.exists(dst_dir):
         os.makedirs(dst_dir)
@@ -39,9 +71,9 @@ def split_data(src_dir, dst_dir, ratio):
             subdirs.append(item)
             for subitem in os.listdir(item_path):
                 subitem_path = os.path.join(item_path, subitem)
-                if os.path.isfile(subitem_path) and subitem.endswith(".wav"):
+                if os.path.isfile(subitem_path) and any([subitem.endswith(f".{ext}") for ext in extensions]):
                     subfiles.append(subitem)
-        elif os.path.isfile(item_path) and item.endswith(".wav"):
+        elif os.path.isfile(item_path) and any([item.endswith(f".{ext}") for ext in extensions]):
             files.append(item)
 
     # 如果源目录下没有任何wav文件，则报错并退出函数
@@ -81,22 +113,25 @@ def split_data(src_dir, dst_dir, ratio):
         src_subdir = os.path.join(src_dir, subdir)
         dst_subdir = os.path.join(dst_dir, subdir)
         # 递归地调用本函数，对子目录中的wav文件进行同样的操作，保留数据结构
-        split_data(src_subdir, dst_subdir, ratio)
+        split_data(src_subdir, dst_subdir, ratio, extensions)
 
 # 定义主函数，用于获取用户输入并调用上述函数
 
-def main():
-    root_dir = os.path.abspath('.')
-    dst_dir = root_dir + "/data/val/audio"
+def main(cmd):
+    dst_dir = cmd.val
     # 抽取比例，默认为1
     ratio = float(SAMPLE_RATE) / 100
 
-    # 固定源目录为根目录下/data/train/audio目录
-    src_dir = root_dir + "/data/train/audio"
+    src_dir = cmd.train
+    
+    extensions = cmd.extensions
 
     # 调用split_data函数，对源目录中的wav文件进行抽取，并剪切到目标目录中，保留数据结构
-    split_data(src_dir, dst_dir, ratio)
+    split_data(src_dir, dst_dir, ratio, extensions)
 
 # 如果本模块是主模块，则执行主函数
 if __name__ == "__main__":
-    main()
+    # parse commands
+    cmd = parse_args()
+    
+    main(cmd)

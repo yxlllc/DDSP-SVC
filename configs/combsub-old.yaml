@@ -13,6 +13,8 @@ data:
   encoder_ckpt: pretrain/hubert/hubert-soft-0d54a1f4.pt
   train_path: data/train # Create a folder named "audio" under this path and put the audio clip in it
   valid_path: data/val # Create a folder named "audio" under this path and put the audio clip in it
+  extensions: # List of extension included in the data collection
+    - wav
 model:
   type: 'CombSub'
   n_mag_allpass: 256

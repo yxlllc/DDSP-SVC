@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 def traverse_dir(
         root_dir,
-        extension,
+        extensions,
         amount=None,
         str_include=None,
         str_exclude=None,
@@ -28,7 +28,7 @@ def traverse_dir(
     cnt = 0
     for root, _, files in os.walk(root_dir):
         for file in files:
-            if file.endswith(extension):
+            if any([file.endswith(f".{ext}") for ext in extensions]):
                 # path
                 mix_path = os.path.join(root, file)
                 pure_path = mix_path[len(root_dir)+1:] if is_pure else mix_path
@@ -201,6 +201,15 @@ def parse_args(args=None, namespace=None):
         default=None,
         help="shallow diffusion steps | default: None",
     )
+    parser.add_argument(
+        "-e",
+        "--extensions",
+        type=str,
+        required=False,
+        nargs="*",
+        default=["wav", "flac"],
+        help="list of using file extensions, e.g.) -f wav flac ..."
+    )
     return parser.parse_args(args=args, namespace=namespace)
 
 
@@ -337,6 +346,8 @@ if __name__ == '__main__':
     device = cmd.device
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        
+    extensions = cmd.extensions
                
     # load diffusion model
     model, vocoder, args = load_model_vocoder(cmd.diff_ckpt, device=device)
@@ -363,7 +374,7 @@ if __name__ == '__main__':
                         device = device)
     wav_paths = traverse_dir(
             cmd.input,
-            extension='wav',
+            extensions=extensions,
             is_pure=True,
             is_sort=True,
             is_ext=True

@@ -30,9 +30,18 @@ def parse_args(args=None, namespace=None):
         default=None,
         required=False,
         help="cpu or cuda, auto if not set")
+    parser.add_argument(
+        "-e",
+        "--extensions",
+        type=str,
+        required=False,
+        nargs="*",
+        default=["wav", "flac"],
+        help="list of using file extensions, e.g.) -f wav flac ..."
+    )
     return parser.parse_args(args=args, namespace=namespace)
     
-def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = 'cuda', use_pitch_aug = False):
+def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = 'cuda', use_pitch_aug = False, extensions = ['wav']):
     
     path_srcdir  = os.path.join(path, 'audio')
     path_unitsdir  = os.path.join(path, 'units')
@@ -46,7 +55,7 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
     # list files
     filelist =  traverse_dir(
         path_srcdir,
-        extension=['wav', 'flac', 'mp3'],
+        extensions=extensions,
         is_pure=True,
         is_sort=True,
         is_ext=True)
@@ -148,6 +157,8 @@ if __name__ == '__main__':
     device = cmd.device
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        
+    extensions = cmd.formats
 
     # load config
     args = utils.load_config(cmd.config)
@@ -190,8 +201,8 @@ if __name__ == '__main__':
                         device = device)    
     
     # preprocess training set
-    preprocess(args.data.train_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device, use_pitch_aug = use_pitch_aug)
+    preprocess(args.data.train_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device, use_pitch_aug = use_pitch_aug, extensions = extensions)
     
     # preprocess validation set
-    preprocess(args.data.valid_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device, use_pitch_aug = False)
+    preprocess(args.data.valid_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device, use_pitch_aug = False, extensions = extensions)
     
