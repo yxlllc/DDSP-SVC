@@ -8,7 +8,6 @@ import shutil
 import soundfile as sf
 
 WAV_MIN_LENGTH = 2    # wav文件的最短时长 / The minimum duration of wav files
-SAMPLE_RATE = 1    # 抽取文件数量的百分比 / The percentage of files to be extracted
 SAMPLE_MIN = 2    # 抽取的文件数量下限 / The lower limit of the number of files to be extracted
 SAMPLE_MAX = 10    # 抽取的文件数量上限 / The upper limit of the number of files to be extracted
 
@@ -30,6 +29,13 @@ def parse_args(args=None, namespace=None):
         type=str,
         default=root_dir + "/data/val/audio",
         help="directory where contains validate dataset"
+    )
+    parser.add_argument(
+        "-r",
+        "--sample_rate",
+        type=float,
+        default=1,
+        help="The percentage of files to be extracted"  # 抽取文件数量的百分比
     )
     parser.add_argument(
         "-e",
@@ -120,7 +126,7 @@ def split_data(src_dir, dst_dir, ratio, extensions):
 def main(cmd):
     dst_dir = cmd.val
     # 抽取比例，默认为1
-    ratio = float(SAMPLE_RATE) / 100
+    ratio = cmd.sample_rate / 100
 
     src_dir = cmd.train
     
