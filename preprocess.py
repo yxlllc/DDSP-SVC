@@ -158,7 +158,7 @@ if __name__ == '__main__':
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
-    extensions = cmd.formats
+    extensions = cmd.extensions
 
     # load config
     args = utils.load_config(cmd.config)
