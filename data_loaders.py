@@ -115,7 +115,7 @@ class AudioDataset(Dataset):
             extensions=extensions,
             is_pure=True,
             is_sort=True,
-            is_ext=False
+            is_ext=True
         )
         self.whole_audio = whole_audio
         self.use_aug = use_aug
@@ -124,8 +124,9 @@ class AudioDataset(Dataset):
             print('Load all the data from :', path_root)
         else:
             print('Load the f0, volume data from :', path_root)
-        for name in tqdm(self.paths, total=len(self.paths)):
-            path_audio = os.path.join(self.path_root, 'audio', name) + '.wav'
+        for name_ext in tqdm(self.paths, total=len(self.paths)):
+            name = os.path.splitext(name_ext)[0]
+            path_audio = os.path.join(self.path_root, 'audio', name_ext)
             duration = librosa.get_duration(filename = path_audio, sr = self.sample_rate)
             
             path_f0 = os.path.join(self.path_root, 'f0', name) + '.npy'
@@ -159,7 +160,7 @@ class AudioDataset(Dataset):
                     audio = audio.half()
                     units = units.half()
                     
-                self.data_buffer[name] = {
+                self.data_buffer[name_ext] = {
                         'duration': duration,
                         'audio': audio,
                         'units': units,
@@ -168,7 +169,7 @@ class AudioDataset(Dataset):
                         'spk_id': spk_id
                         }
             else:
-                self.data_buffer[name] = {
+                self.data_buffer[name_ext] = {
                         'duration': duration,
                         'f0': f0,
                         'volume': volume,
@@ -177,16 +178,17 @@ class AudioDataset(Dataset):
            
 
     def __getitem__(self, file_idx):
-        name = self.paths[file_idx]
-        data_buffer = self.data_buffer[name]
+        name_ext = self.paths[file_idx]
+        data_buffer = self.data_buffer[name_ext]
         # check duration. if too short, then skip
         if data_buffer['duration'] < (self.waveform_sec + 0.1):
             return self.__getitem__( (file_idx + 1) % len(self.paths))
             
         # get item
-        return self.get_data(name, data_buffer)
+        return self.get_data(name_ext, data_buffer)
 
-    def get_data(self, name, data_buffer):
+    def get_data(self, name_ext, data_buffer):
+        name = os.path.splitext(name_ext)[0]
         frame_resolution = self.hop_size / self.sample_rate
         duration = data_buffer['duration']
         waveform_sec = duration if self.whole_audio else self.waveform_sec

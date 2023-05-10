@@ -123,7 +123,7 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
             os.makedirs(os.path.dirname(path_volumefile), exist_ok=True)
             np.save(path_volumefile, volume)
             if mel_extractor is not None:
-                pitch_aug_dict[file[:-(len(ext)+1)]] = keyshift
+                pitch_aug_dict[file] = keyshift
                 os.makedirs(os.path.dirname(path_melfile), exist_ok=True)
                 np.save(path_melfile, mel)
                 os.makedirs(os.path.dirname(path_augmelfile), exist_ok=True)
@@ -157,13 +157,13 @@ if __name__ == '__main__':
     device = cmd.device
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        
-    extensions = cmd.extensions
 
     # load config
     args = utils.load_config(cmd.config)
     sample_rate = args.data.sampling_rate
     hop_size = args.data.block_size
+    
+    extensions = args.data.extensions
     
     # initialize f0 extractor
     f0_extractor = F0_Extractor(
