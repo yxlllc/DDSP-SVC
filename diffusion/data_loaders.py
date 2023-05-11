@@ -272,7 +272,7 @@ class AudioDataset(Dataset):
         # load shift
         aug_shift = torch.LongTensor(np.array([[aug_shift]]))
         
-        return dict(mel=mel, f0=f0_frames, volume=volume_frames, units=units, spk_id=spk_id, aug_shift=aug_shift, name=name)
+        return dict(mel=mel, f0=f0_frames, volume=volume_frames, units=units, spk_id=spk_id, aug_shift=aug_shift, name=name, name_ext=name_ext)
 
     def __len__(self):
         return len(self.paths)

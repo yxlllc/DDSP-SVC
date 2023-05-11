@@ -199,7 +199,7 @@ class AudioDataset(Dataset):
         units_frame_len = int(waveform_sec / frame_resolution)
         audio = data_buffer.get('audio')
         if audio is None:
-            path_audio = os.path.join(self.path_root, 'audio', name) + '.wav'
+            path_audio = os.path.join(self.path_root, 'audio', name_ext)
             audio, sr = librosa.load(
                     path_audio, 
                     sr = self.sample_rate, 
