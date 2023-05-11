@@ -130,20 +130,20 @@ class AudioDataset(Dataset):
             path_audio = os.path.join(self.path_root, 'audio', name_ext)
             duration = librosa.get_duration(filename = path_audio, sr = self.sample_rate)
             
-            path_f0 = os.path.join(self.path_root, 'f0', name) + '.npy'
+            path_f0 = os.path.join(self.path_root, 'f0', name_ext) + '.npy'
             f0 = np.load(path_f0)
             f0 = torch.from_numpy(f0).float().unsqueeze(-1).to(device)
                 
-            path_volume = os.path.join(self.path_root, 'volume', name) + '.npy'
+            path_volume = os.path.join(self.path_root, 'volume', name_ext) + '.npy'
             volume = np.load(path_volume)
             volume = torch.from_numpy(volume).float().unsqueeze(-1).to(device)
             
-            path_augvol = os.path.join(self.path_root, 'aug_vol', name) + '.npy'
+            path_augvol = os.path.join(self.path_root, 'aug_vol', name_ext) + '.npy'
             aug_vol = np.load(path_augvol)
             aug_vol = torch.from_numpy(aug_vol).float().unsqueeze(-1).to(device)
                         
             if n_spk is not None and n_spk > 1:
-                dirname_split = re.split(r"_|\-", os.path.dirname(name), 2)[0]
+                dirname_split = re.split(r"_|\-", os.path.dirname(name_ext), 2)[0]
                 spk_id = int(dirname_split) if str.isdigit(dirname_split) else 0
                 if spk_id < 1 or spk_id > n_spk:
                     raise ValueError(' [x] Muiti-speaker traing error : spk_id must be a positive integer from 1 to n_spk ')
@@ -158,15 +158,15 @@ class AudioDataset(Dataset):
                     audio = librosa.to_mono(audio)
                 audio = torch.from_numpy(audio).to(device)
                 '''
-                path_mel = os.path.join(self.path_root, 'mel', name) + '.npy'
+                path_mel = os.path.join(self.path_root, 'mel', name_ext) + '.npy'
                 mel = np.load(path_mel)
                 mel = torch.from_numpy(mel).to(device)
                 
-                path_augmel = os.path.join(self.path_root, 'aug_mel', name) + '.npy'
+                path_augmel = os.path.join(self.path_root, 'aug_mel', name_ext) + '.npy'
                 aug_mel = np.load(path_augmel)
                 aug_mel = torch.from_numpy(aug_mel).to(device)
                 
-                path_units = os.path.join(self.path_root, 'units', name) + '.npy'
+                path_units = os.path.join(self.path_root, 'units', name_ext) + '.npy'
                 units = np.load(path_units)
                 units = torch.from_numpy(units).to(device)
                 
@@ -237,7 +237,7 @@ class AudioDataset(Dataset):
         mel_key = 'aug_mel' if aug_flag else 'mel'
         mel = data_buffer.get(mel_key)
         if mel is None:
-            mel = os.path.join(self.path_root, mel_key, name) + '.npy'
+            mel = os.path.join(self.path_root, mel_key, name_ext) + '.npy'
             mel = np.load(mel)
             mel = mel[start_frame : start_frame + units_frame_len]
             mel = torch.from_numpy(mel).float() 
@@ -247,7 +247,7 @@ class AudioDataset(Dataset):
         # load units
         units = data_buffer.get('units')
         if units is None:
-            units = os.path.join(self.path_root, 'units', name) + '.npy'
+            units = os.path.join(self.path_root, 'units', name_ext) + '.npy'
             units = np.load(units)
             units = units[start_frame : start_frame + units_frame_len]
             units = torch.from_numpy(units).float() 
