@@ -215,7 +215,7 @@ class AudioDataset(Dataset):
         # load units
         units = data_buffer.get('units')
         if units is None:
-            units  = os.path.join(self.path_root, 'units', name) + '.npy'
+            units  = os.path.join(self.path_root, 'units', name_ext) + '.npy'
             units = np.load(units)
             units = units[start_frame : start_frame + units_frame_len]
             units = torch.from_numpy(units).float() 
