@@ -270,7 +270,7 @@ class AudioDataset(Dataset):
         spk_id = data_buffer.get('spk_id')
         
         # load shift
-        aug_shift = torch.LongTensor(np.array([[aug_shift]]))
+        aug_shift = torch.from_numpy(np.array([[aug_shift]])).float()
         
         return dict(mel=mel, f0=f0_frames, volume=volume_frames, units=units, spk_id=spk_id, aug_shift=aug_shift, name=name, name_ext=name_ext)
 
