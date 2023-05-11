@@ -248,7 +248,7 @@ if __name__ == '__main__':
     f0 = f0 * 2 ** (float(cmd.key) / 12)
     
     # formant change
-    formant_shift_key = torch.LongTensor(np.array([[float(cmd.formant_shift_key)]])).to(device)
+    formant_shift_key = torch.from_numpy(np.array([[float(cmd.formant_shift_key)]])).float().to(device)
     
     # extract volume 
     print('Extracting the volume envelope of the input audio...')

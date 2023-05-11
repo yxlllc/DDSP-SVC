@@ -208,7 +208,7 @@ def parse_args(args=None, namespace=None):
         required=False,
         nargs="*",
         default=["wav", "flac"],
-        help="list of using file extensions, e.g.) -f wav flac ..."
+        help="list of using file extensions, e.g.) -f wav flac ... | default: wav flac"
     )
     return parser.parse_args(args=args, namespace=namespace)
 
@@ -257,7 +257,7 @@ def infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, unit
     f0 = f0 * 2 ** (float(cmd.key) / 12)
     
     # formant change
-    formant_shift_key = torch.LongTensor(np.array([[float(cmd.formant_shift_key)]])).to(device)
+    formant_shift_key = torch.from_numpy(np.array([[float(cmd.formant_shift_key)]])).float().to(device)
     
     # extract volume 
     print('Extracting the volume envelope of the input audio...')
@@ -327,7 +327,7 @@ def infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, unit
                     spk_id = diff_spk_id, 
                     spk_mix_dict = spk_mix_dict,
                     aug_shift = formant_shift_key,
-                    gt_spec=input_mel[:,:units.size(1)],
+                    gt_spec=input_mel[:,:units.size(1)] if input_mel is not None else None,
                     infer=True, 
                     infer_speedup=infer_speedup, 
                     method=method,
@@ -381,7 +381,7 @@ if __name__ == '__main__':
         )
     for path in wav_paths:
         input_path = os.path.join(cmd.input, path)
-        output_path = os.path.join(cmd.output, path)
+        output_path = os.path.join(cmd.output, os.path.splitext(path)[0]) + '.wav'
         print('_______________________________')
         print('Input: ' + input_path)
         infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, units_encoder)
