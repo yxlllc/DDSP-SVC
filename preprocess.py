@@ -32,7 +32,7 @@ def parse_args(args=None, namespace=None):
         help="cpu or cuda, auto if not set")
     return parser.parse_args(args=args, namespace=namespace)
     
-def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = 'cuda', use_pitch_aug = False):
+def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = 'cuda', use_pitch_aug = False, extensions = ['wav']):
     
     path_srcdir  = os.path.join(path, 'audio')
     path_unitsdir  = os.path.join(path, 'units')
@@ -46,7 +46,7 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
     # list files
     filelist =  traverse_dir(
         path_srcdir,
-        extension='wav',
+        extensions=extensions,
         is_pure=True,
         is_sort=True,
         is_ext=True)
@@ -56,8 +56,7 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
     
     # run  
     def process(file):
-        ext = file.split('.')[-1]
-        binfile = file[:-(len(ext)+1)]+'.npy'
+        binfile = file+'.npy'
         path_srcfile = os.path.join(path_srcdir, file)
         path_unitsfile = os.path.join(path_unitsdir, binfile)
         path_f0file = os.path.join(path_f0dir, binfile)
@@ -114,7 +113,7 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
             os.makedirs(os.path.dirname(path_volumefile), exist_ok=True)
             np.save(path_volumefile, volume)
             if mel_extractor is not None:
-                pitch_aug_dict[file[:-(len(ext)+1)]] = keyshift
+                pitch_aug_dict[file] = keyshift
                 os.makedirs(os.path.dirname(path_melfile), exist_ok=True)
                 np.save(path_melfile, mel)
                 os.makedirs(os.path.dirname(path_augmelfile), exist_ok=True)
@@ -154,6 +153,8 @@ if __name__ == '__main__':
     sample_rate = args.data.sampling_rate
     hop_size = args.data.block_size
     
+    extensions = args.data.extensions
+    
     # initialize f0 extractor
     f0_extractor = F0_Extractor(
                         args.data.f0_extractor, 
@@ -190,8 +191,8 @@ if __name__ == '__main__':
                         device = device)    
     
     # preprocess training set
-    preprocess(args.data.train_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device, use_pitch_aug = use_pitch_aug)
+    preprocess(args.data.train_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device, use_pitch_aug = use_pitch_aug, extensions = extensions)
     
     # preprocess validation set
-    preprocess(args.data.valid_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device, use_pitch_aug = False)
+    preprocess(args.data.valid_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device, use_pitch_aug = False, extensions = extensions)
     

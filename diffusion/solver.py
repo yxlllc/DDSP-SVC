@@ -28,7 +28,7 @@ def test(args, model, vocoder, loader_test, saver):
 
             # unpack data
             for k in data.keys():
-                if k != 'name':
+                if not k.startswith('name'):
                     data[k] = data[k].to(args.device)
             print('>>', data['name'][0])
 
@@ -68,7 +68,7 @@ def test(args, model, vocoder, loader_test, saver):
             saver.log_spec(data['name'][0], data['mel'], mel)
             
             # log audio
-            path_audio = os.path.join(args.data.valid_path, 'audio', data['name'][0]) + '.wav'
+            path_audio = os.path.join(args.data.valid_path, 'audio', data['name_ext'][0])
             audio, sr = librosa.load(path_audio, sr=args.data.sampling_rate)
             if len(audio.shape) > 1:
                 audio = librosa.to_mono(audio)
@@ -114,7 +114,7 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
 
             # unpack data
             for k in data.keys():
-                if k != 'name':
+                if not k.startswith('name'):
                     data[k] = data[k].to(args.device)
             
             # forward
