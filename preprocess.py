@@ -30,15 +30,6 @@ def parse_args(args=None, namespace=None):
         default=None,
         required=False,
         help="cpu or cuda, auto if not set")
-    parser.add_argument(
-        "-e",
-        "--extensions",
-        type=str,
-        required=False,
-        nargs="*",
-        default=["wav", "flac"],
-        help="list of using file extensions, e.g.) -f wav flac ..."
-    )
     return parser.parse_args(args=args, namespace=namespace)
     
 def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = 'cuda', use_pitch_aug = False, extensions = ['wav']):
@@ -65,8 +56,7 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
     
     # run  
     def process(file):
-        ext = file.split('.')[-1]
-        binfile = file[:-(len(ext)+1)]+'.npy'
+        binfile = file+'.npy'
         path_srcfile = os.path.join(path_srcdir, file)
         path_unitsfile = os.path.join(path_unitsdir, binfile)
         path_f0file = os.path.join(path_f0dir, binfile)
