@@ -42,7 +42,7 @@ train:
   epochs: 100000
   interval_log: 10
   interval_val: 2000
-  interval_force_save: 20000
+  interval_force_save: 10000
   lr: 0.0002
   decay_step: 100000
   gamma: 0.5

@@ -14,7 +14,7 @@ Language: [English](./README.md) **简体中文**
 
 https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/hubertsoft_pitch_410k/model_0.pt (使用 'hubertsoft' 编码器)
 
-https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/pitch_400k/model_0.pt (使用 'contentvec768l12' 编码器)
+https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/fix_pitch_add_vctk_600k/model_0.pt (使用 'contentvec768l12' 编码器)
 
 将名为`model_0.pt`的预训练模型, 放到`diffusion.yaml`里面 "expdir: exp/*****" 参数指定的模型导出文件夹内, 没有就新建一个, 程序会自动加载该文件夹下的预训练模型。
 
