@@ -47,7 +47,7 @@ If '-ddsp' is empty, the pure diffusion model is used, at this time, shallow dif
 
 The program will automatically check whether the parameters of the DDSP model and the diffusion model match (sampling rate, hop size and encoder), and if they do not match, it will ignore loading the DDSP model and enter Gaussian diffusion mode.
 
-Real-time GUI：
+(5) Real-time GUI：
 ```bash
 python gui_diff.py
 ```
@@ -75,9 +75,12 @@ NOTE : I only test the code using python 3.8 (windows) + torch 1.9.1 + torchaudi
 UPDATE: python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 works, and training is faster.
 ## 2. Configuring the pretrained model
 - Feature Encoder (choose only one):
-  (1) Download the pre-trained [ContentVec](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) encoder and put it under  `pretrain/contentvec` folder.
-   (2) Download the pre-trained [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) encoder and put it under ` pretrain/hubert` folder, and then modify the configuration file at the same time.
+
+ (1) Download the pre-trained [ContentVec](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) encoder and put it under  `pretrain/contentvec` folder.
+
+(2) Download the pre-trained [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) encoder and put it under ` pretrain/hubert` folder, and then modify the configuration file at the same time.
 - Vocoder or enhancer:
+
 Download the pre-trained [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-v1/nsf_hifigan_20221211.zip) vocoder and unzip it into `pretrain/` folder.
 ## 3. Preprocessing
 

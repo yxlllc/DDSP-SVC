@@ -78,9 +78,12 @@ pip install -r requirements.txt
 更新：python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 可以运行，训练速度更快了。
 ## 2. 配置预训练模型
   - 特征编码器 (可只选其一)：
+
  (1) 下载预训练 [ContentVec](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) 编码器并将其放到 `pretrain/contentvec` 文件夹。
+  
   (2) 下载预训练 [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) 编码器并将其放到 `pretrain/hubert` 文件夹，同时修改配置文件。
 - 声码器或增强器：
+
 下载预训练 [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-v1/nsf_hifigan_20221211.zip) 声码器并解压至 `pretrain/` 文件夹。
 
 ## 3. 预处理
