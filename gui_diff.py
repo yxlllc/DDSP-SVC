@@ -234,7 +234,7 @@ class GUI:
         # 界面布局
         layout = [
             [sg.Frame(layout=[
-                [sg.Input(key='sg_model', default_text='exp\\combsub-test\\model_300000.pt'),
+                [sg.Input(key='sg_model', default_text='exp\\ddsp-demo\\model_300000.pt'),
                  sg.FileBrowse(i18n('选择模型文件'), key='choose_model')]
             ], title=i18n('模型：.pt格式(自动识别同目录下config.yaml)')),
                 sg.Frame(layout=[
@@ -284,7 +284,7 @@ class GUI:
                 ], title=i18n('性能设置')),
                 sg.Frame(layout=[
                     [sg.Text(i18n("扩散模型文件"))],
-                    [sg.Input(key='diff_project', default_text='exp\\diffusion-test\\model_400000.pt'),
+                    [sg.Input(key='diff_project', default_text='exp\\diffusion-demo\\model_400000.pt'),
                      sg.FileBrowse(i18n('选择模型文件'), key='choose_model')],
                     [sg.Text(i18n("扩散说话人id")), sg.Input(key='diff_spk_id', default_text='1', size=18)],
                     [sg.Text(i18n("扩散深度")), sg.Input(key='k_step', default_text='200', size=18)],
