@@ -135,8 +135,6 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
             if speaker_encoder is not None:
                 os.makedirs(os.path.dirname(path_spk_embfile), exist_ok=True)
                 np.save(path_spk_embfile, spk_emb)
-                os.makedirs(os.path.dirname(path_unitsfile), exist_ok=True)
-                np.save(path_unitsfile, units)
         else:
             print('\n[Error] F0 extraction failed: ' + path_srcfile)
             os.makedirs(os.path.dirname(path_skipfile), exist_ok=True)
