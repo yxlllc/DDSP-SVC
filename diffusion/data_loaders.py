@@ -157,7 +157,8 @@ class AudioDataset(Dataset):
                     raise ValueError(' [x] Muiti-speaker traing error : spk_id must be a positive integer from 1 to n_spk ')
             else:
                 spk_id = 1
-            t_spk_id = spk_id = torch.LongTensor(np.array([spk_id])).to(device)
+                t_spk_id = spk_id
+            spk_id = torch.LongTensor(np.array([spk_id])).to(device)
 
             if load_all_data:
                 '''
