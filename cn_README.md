@@ -5,7 +5,7 @@ Language: [English](./README.md) **简体中文**
 </div>
 基于 DDSP（可微分数字信号处理）的实时端到端歌声转换系统
 
-## （3.0 - 实验性）浅扩散模型 （DDSP + Diff-SVC 重构版）
+## （3.0 升级）浅扩散模型 （DDSP + Diff-SVC 重构版）
 ![Diagram](diagram.png)
 
 数据准备，配置编码器（hubert 或者 contentvec ) 与声码器 (nsf-hifigan) 的环节与训练纯 DDSP 模型相同。
@@ -38,7 +38,9 @@ python train.py -c configs/combsub.yaml
 ```bash
 python main_diff.py -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
 ```
-speedup 为加速倍速，method 为 pndm 或者 dpm-solver, kstep为浅扩散步数，diffid 为扩散模型的说话人id，其他参数与 main.py 含义相同。
+speedup 为加速倍速，method 为 pndm 或者 dpm-solver, kstep 为浅扩散步数，diffid 为扩散模型的说话人id，其他参数与 main.py 含义相同。
+
+合理的 kstep 约为 100~300，speedup 超过 20 时可能将感知到音质损失。
 
 如果训练时已经用相同的编号表示相同的说话人，则 -diffid 可以为空，否则需要指定 -diffid 选项。
 
@@ -54,17 +56,21 @@ python gui_diff.py
 ## 0.简介
 DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个人电脑上普及的自由 AI 变声器软件。
 
-相比于比较著名的 [Diff-SVC](https://github.com/prophesier/diff-svc) 和 [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc), 它训练和合成对电脑硬件的要求要低的多，并且训练时长有数量级的缩短。另外在进行实时变声时，本项目的硬件资源显著低于 SO-VITS-SVC，而 Diff-SVC 合成太慢几乎无法进行实时变声。
+相比于著名的 [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc), 它训练和合成对电脑硬件的要求要低的多，并且训练时长有数量级的缩短，和 [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 的训练速度接近。
 
-虽然 DDSP 的原始合成质量不是很理想（训练时在 tensorboard 中可以听到原始输出），但在使用基于预训练声码器的增强器增强音质后，对于部分数据集可以达到接近 SOVITS-SVC 的合成质量。
+另外在进行实时变声时，本项目的硬件资源消耗显著低于 SO-VITS-SVC 和 RVC，在相同的硬件配置上经过调参可以达到更低的延迟。
 
-如果训练数据的质量非常高，可能仍然 Diff-SVC 将拥有最高的合成质量。在`samples`文件夹中包含合成示例，相关模型检查点可以从仓库发布页面下载。
+虽然 DDSP 的原始合成质量不是很理想（训练时在 tensorboard 中可以听到原始输出），但在使用基于预训练声码器的增强器（老版本）或使用浅扩散模型（新版本）增强音质后，对于部分数据集可以达到不亚于 SOVITS-SVC 和 RVC 的合成质量。在`samples`文件夹中包含一个合成示例，相关模型检查点可以从仓库发布页面下载。
+
+老版本的模型仍然兼容的，以下章节是老版本的使用说明。新版本部分操作是相同的，见上一章节。
 
 免责声明：请确保仅使用**合法获得的授权数据**训练 DDSP-SVC 模型，不要将这些模型及其合成的任何音频用于非法目的。 本库作者不对因使用这些模型检查点和音频而造成的任何侵权，诈骗等违法行为负责。
 
 1.1 更新：支持多说话人和音色混合。
 
 2.0 更新：开始支持实时 vst 插件，并优化了 combsub 模型， 训练速度极大提升。旧的 combsub 模型仍然兼容，可用 combsub-old.yaml 训练，sins 模型不受影响，但由于训练速度远慢于 combsub, 目前版本已经不推荐使用。
+
+3.0 更新：由于作者删库 vst 插件取消支持，转为使用独立的实时变声前端；支持多种编码器，并将 contentvec768l12 作为默认编码器；引入浅扩散模型，合成质量极大提升。
 
 ## 1. 安装依赖
 1. 安装PyTorch：我们推荐从 [**PyTorch 官方网站 **](https://pytorch.org/) 下载 PyTorch.
@@ -229,4 +235,6 @@ python gui.py
 * [ddsp](https://github.com/magenta/ddsp)
 * [pc-ddsp](https://github.com/yxlllc/pc-ddsp)
 * [soft-vc](https://github.com/bshall/soft-vc)
+* [ContentVec](https://github.com/auspicious3000/contentvec)
 * [DiffSinger (OpenVPI version)](https://github.com/openvpi/DiffSinger)
+* [Diff-SVC](https://github.com/prophesier/diff-svc)
