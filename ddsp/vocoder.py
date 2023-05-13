@@ -24,27 +24,43 @@ CREPE_RESAMPLE_KERNEL = {}
 
 
 class SpeakerEncoder:
-    def __init__(self, speaker_encoder, speaker_encoder_config, speaker_encoder_ckpt, encoder_sample_rate, device='cuda'):
+    def __init__(self, speaker_encoder, speaker_encoder_config, speaker_encoder_ckpt, encoder_sample_rate, device='cuda',
+                 use_torchaudio=False):
+        self.use_torchaudio = use_torchaudio
         self.encoder_sample_rate = encoder_sample_rate
         self.device = device
         self.resample_kernel = {}
         if speaker_encoder == "ge2e":
             self.encoder = GE2E(speaker_encoder_config, speaker_encoder_ckpt, device=device)
+        else:
+            raise ValueError(f" [x] Unknown speaker encoder: {speaker_encoder}")
 
-    def __call__(self, audio, sample_rate):
+    def __call__(self, audio=None, audio_t=None, sample_rate=44100):  # if use torchaudio, audio_t must be a tensor; else audio must be a np
+        audio_res = None
         if sample_rate == self.encoder_sample_rate:
-            audio_res = audio
+            if self.use_torchaudio and (audio_t is not None):
+                audio_res = audio_t.cpu().numpy().squeeze(0)
+            else:
+                if audio is not None:
+                    audio_res = audio
         else:
             key_str = str(sample_rate)
-            if key_str not in self.resample_kernel:
-                self.resample_kernel[key_str] = Resample(sample_rate, self.encoder_sample_rate, lowpass_filter_width=128).to(self.device)
-            audio_res = self.resample_kernel[key_str](audio)
+            if self.use_torchaudio and (audio_t is not None):
+                if key_str not in self.resample_kernel:
+                    self.resample_kernel[key_str] = Resample(sample_rate, self.encoder_sample_rate, lowpass_filter_width=128).to(self.device)
+                audio_res = self.resample_kernel[key_str](audio_t).cpu().numpy().squeeze(0)
+            else:
+                if audio is not None:
+                    audio_res = librosa.resample(audio, orig_sr=sample_rate, target_sr=self.encoder_sample_rate)
+        assert audio_res is not None
         return self.encoder(audio_res)
 
 
 class GE2E:
     def __init__(self, config_path, ckpt_path, device='cuda'):
-        self.config = json.load(config_path)
+        import json5
+        with open(config_path) as f:
+            self.config = json5.load(f)
         # load model
         self.model = TTSSpeakerEncoder(
             self.config['model']["input_dim"],
@@ -73,14 +89,15 @@ class GE2E:
         self.stft_pad_mode = 'reflect'
         self.spec_gain = 20.0
         self.base = 10
+        self.device = device
         mel_basis = librosa.filters.mel(
-            sr=self.config["audio"]["sample_rate"], n_fft=self.config["audio"]['n_fft'],
+            sr=self.config["audio"]["sample_rate"], n_fft=self.config["audio"]['fft_size'],
             n_mels=self.num_mels,fmin=self.config["audio"]['mel_fmin'],
             fmax=self.config["audio"]['mel_fmax']
         )
         self.mel_basis = torch.from_numpy(mel_basis).float()
 
-    def __call__(self, audio):
+    def __call__(self, audio, use_old_infer=True):
         y = audio
         if self.preemphasis != 0:
             y = scipy.signal.lfilter([1, -self.preemphasis], [1], y)
@@ -95,29 +112,55 @@ class GE2E:
         else:
             spec = self.spec_gain * np.log(np.maximum(1e-5, D))
         spec = self.normalize(spec).astype(np.float32)
-        spk_emb = self.model.compute_embedding(spec).detach()
+        spec = torch.from_numpy(spec.T)
+        spec = spec.to(self.device)
+        spec = spec.unsqueeze(0)
+        if use_old_infer:
+            spk_emb = self.compute_embedding_old(spec).detach().cpu().numpy()
+        else:
+            spk_emb = self.model.compute_embedding(spec).detach().cpu().numpy()
         return spk_emb.squeeze()
 
-    def normalize(self, spec) -> np.ndarray:
-        spec = spec.copy()
+    def normalize(self, S) -> np.ndarray:
+        S = S.copy()
         if self.signal_norm:
-            # range normalization
-            spec -= self.ref_level_db  # discard certain range of DB assuming it is air noise
-            spec_norm = (spec - self.min_level_db) / (-self.min_level_db)
+            S -= self.ref_level_db
+            S_norm = (S - self.min_level_db) / (-self.min_level_db)
             if self.symmetric_norm:
-                spec_norm = ((2 * self.max_norm) * spec_norm) - self.max_norm
+                S_norm = ((2 * self.max_norm) * S_norm) - self.max_norm
                 if self.clip_norm:
-                    spec_norm = np.clip(
-                        spec_norm, -self.max_norm, self.max_norm  # pylint: disable=invalid-unary-operand-type
-                    )
-                return spec_norm
+                    S_norm = np.clip(S_norm, -self.max_norm, self.max_norm)
+                return S_norm
             else:
-                spec_norm = self.max_norm * spec_norm
+                S_norm = self.max_norm * S_norm
                 if self.clip_norm:
-                    spec_norm = np.clip(spec_norm, 0, self.max_norm)
-                return spec_norm
+                    S_norm = np.clip(S_norm, 0, self.max_norm)
+                return S_norm
         else:
-            return spec
+            return S
+
+    def compute_embedding_old(self, x, num_frames=250, num_eval=10, return_mean=True):
+        max_len = x.shape[1]
+
+        if max_len < num_frames:
+            num_frames = max_len
+
+        offsets = np.linspace(0, max_len - num_frames, num=num_eval)
+
+        frames_batch = []
+        for offset in offsets:
+            offset = int(offset)
+            end_offset = int(offset + num_frames)
+            frames = x[:, offset:end_offset]
+            frames_batch.append(frames)
+
+        frames_batch = torch.cat(frames_batch, dim=0)
+        embeddings = self.model.inference(frames_batch)
+
+        if return_mean:
+            embeddings = torch.mean(embeddings, dim=0, keepdim=True)
+
+        return embeddings
 
 
 class F0_Extractor:
