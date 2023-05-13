@@ -39,7 +39,7 @@ class SpeakerEncoder:
             if key_str not in self.resample_kernel:
                 self.resample_kernel[key_str] = Resample(sample_rate, self.encoder_sample_rate, lowpass_filter_width=128).to(self.device)
             audio_res = self.resample_kernel[key_str](audio)
-            return self.encoder(audio_res)
+        return self.encoder(audio_res)
 
 
 class GE2E:
