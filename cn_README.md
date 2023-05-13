@@ -79,7 +79,7 @@ pip install -r requirements.txt
 ## 2. 配置预训练模型
   - 特征编码器 (可只选其一)：
 
- (1) 下载预训练 [ContentVec](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) 编码器并将其放到 `pretrain/contentvec` 文件夹。
+ (1) 下载预训练 [**ContentVec**](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) 编码器并将其放到 `pretrain/contentvec` 文件夹。
   
   (2) 下载预训练 [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) 编码器并将其放到 `pretrain/hubert` 文件夹，同时修改配置文件。
 - 声码器或增强器：
