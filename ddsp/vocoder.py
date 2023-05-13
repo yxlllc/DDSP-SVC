@@ -1,3 +1,4 @@
+import json
 import os
 import numpy as np
 import yaml
@@ -6,10 +7,13 @@ import torch.nn.functional as F
 import pyworld as pw
 import parselmouth
 import torchcrepe
-import resampy
+import librosa
+import fsspec
 from transformers import HubertModel, Wav2Vec2FeatureExtractor
 from fairseq import checkpoint_utils
 from encoder.hubert.model import HubertSoft
+from encoder.speaker_encoder.model import SpeakerEncoder as TTSSpeakerEncoder
+import scipy.signal
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from torchaudio.transforms import Resample
 from .unit2control import Unit2Control
@@ -17,6 +21,104 @@ from .core import frequency_filter, upsample, remove_above_fmax, MaskedAvgPool1d
 import time
 
 CREPE_RESAMPLE_KERNEL = {}
+
+
+class SpeakerEncoder:
+    def __init__(self, speaker_encoder, speaker_encoder_config, speaker_encoder_ckpt, encoder_sample_rate, device='cuda'):
+        self.encoder_sample_rate = encoder_sample_rate
+        self.device = device
+        self.resample_kernel = {}
+        if speaker_encoder == "ge2e":
+            self.encoder = GE2E(speaker_encoder_config, speaker_encoder_ckpt, device=device)
+
+    def __call__(self, audio, sample_rate):
+        if sample_rate == self.encoder_sample_rate:
+            audio_res = audio
+        else:
+            key_str = str(sample_rate)
+            if key_str not in self.resample_kernel:
+                self.resample_kernel[key_str] = Resample(sample_rate, self.encoder_sample_rate, lowpass_filter_width=128).to(self.device)
+            audio_res = self.resample_kernel[key_str](audio)
+            return self.encoder(audio_res)
+
+
+class GE2E:
+    def __init__(self, config_path, ckpt_path, device='cuda'):
+        self.config = json.load(config_path)
+        # load model
+        self.model = TTSSpeakerEncoder(
+            self.config['model']["input_dim"],
+            self.config['model']["proj_dim"],
+            self.config['model']["lstm_dim"],
+            self.config['model']["num_lstm_layers"],
+        )
+        with fsspec.open(ckpt_path, "rb") as f:
+            state = torch.load(f, map_location=device)
+        self.model.load_state_dict(state["model"])
+        self.model = self.model.to(device)
+        self.model.eval()
+
+        self.preemphasis = self.config["audio"]["preemphasis"]
+        self.do_amp_to_db_mel = True
+        self.fft_size = self.config["audio"]["fft_size"]
+        self.hop_length = self.config["audio"]["hop_length"]
+        self.win_length = self.config["audio"]["win_length"]
+        self.signal_norm =self.config['audio']['signal_norm']
+        self.num_mels = self.config["audio"]["num_mels"]
+        self.ref_level_db = self.config["audio"]['ref_level_db']
+        self.min_level_db = self.config["audio"]['min_level_db']
+        self.symmetric_norm = self.config["audio"]['symmetric_norm']
+        self.clip_norm = self.config["audio"]['clip_norm']
+        self.max_norm = self.config["audio"]['max_norm']
+        self.stft_pad_mode = 'reflect'
+        self.spec_gain = 20.0
+        self.base = 10
+        mel_basis = librosa.filters.mel(
+            sr=self.config["audio"]["sample_rate"], n_fft=self.config["audio"]['n_fft'],
+            n_mels=self.num_mels,fmin=self.config["audio"]['mel_fmin'],
+            fmax=self.config["audio"]['mel_fmax']
+        )
+        self.mel_basis = torch.from_numpy(mel_basis).float()
+
+    def __call__(self, audio):
+        y = audio
+        if self.preemphasis != 0:
+            y = scipy.signal.lfilter([1, -self.preemphasis], [1], y)
+        D = librosa.stft(
+            y=y,
+            n_fft=self.fft_size, hop_length=self.hop_length, win_length=self.win_length, pad_mode=self.stft_pad_mode,
+            window="hann", center=True)
+        D = np.abs(D)
+        D = np.dot(self.mel_basis, D)
+        if self.base == 10:
+            spec = self.spec_gain * np.log10(np.maximum(1e-5, D))
+        else:
+            spec = self.spec_gain * np.log(np.maximum(1e-5, D))
+        spec = self.normalize(spec).astype(np.float32)
+        spk_emb = self.model.compute_embedding(spec).detach()
+        return spk_emb.squeeze()
+
+    def normalize(self, spec) -> np.ndarray:
+        spec = spec.copy()
+        if self.signal_norm:
+            # range normalization
+            spec -= self.ref_level_db  # discard certain range of DB assuming it is air noise
+            spec_norm = (spec - self.min_level_db) / (-self.min_level_db)
+            if self.symmetric_norm:
+                spec_norm = ((2 * self.max_norm) * spec_norm) - self.max_norm
+                if self.clip_norm:
+                    spec_norm = np.clip(
+                        spec_norm, -self.max_norm, self.max_norm  # pylint: disable=invalid-unary-operand-type
+                    )
+                return spec_norm
+            else:
+                spec_norm = self.max_norm * spec_norm
+                if self.clip_norm:
+                    spec_norm = np.clip(spec_norm, 0, self.max_norm)
+                return spec_norm
+        else:
+            return spec
+
 
 class F0_Extractor:
     def __init__(self, f0_extractor, sample_rate = 44100, hop_size = 512, f0_min = 65, f0_max = 800):
@@ -88,7 +190,7 @@ class F0_Extractor:
             f0 = np.pad(f0, (start_frame, 0))
            
         else:
-            raise ValueError(f" [x] Unknown f0 extractor: {f0_extractor}")
+            raise ValueError(f" [x] Unknown f0 extractor: {self.f0_extractor}")
                     
         # interpolate the unvoiced f0 
         if uv_interp:
@@ -179,7 +281,8 @@ class Units_Encoder:
         index = torch.clamp(torch.round(ratio * torch.arange(n_frames).to(self.device)).long(), max = units.size(1) - 1)
         units_aligned = torch.gather(units, 1, index.unsqueeze(0).unsqueeze(-1).repeat([1, 1, units.size(-1)]))
         return units_aligned
-        
+
+
 class Audio2HubertSoft(torch.nn.Module):
     def __init__(self, path, h_sample_rate = 16000, h_hop_size = 320):
         super().__init__()
@@ -286,6 +389,8 @@ class CNHubertSoftFish(torch.nn.Module):
     def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu', gate_size=10):
         super().__init__()
         self.device = device
+        print(' [Encoder Model] CN Hubert Soft fish')
+        print(' [Loading] ' + path)
         self.gate_size = gate_size
 
         self.feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
@@ -397,7 +502,7 @@ class Audio2HubertBase768L12():
 class Audio2HubertLarge1024L24():
     def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu'):
         self.device = device
-        print(' [Encoder Model] HuBERT Base')
+        print(' [Encoder Model] HuBERT Large')
         print(' [Loading] ' + path)
         self.models, self.saved_cfg, self.task = checkpoint_utils.load_model_ensemble_and_task([path], suffix="", )
         self.hubert = self.models[0]
