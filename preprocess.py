@@ -9,10 +9,11 @@ import argparse
 import shutil
 from logger import utils
 from tqdm import tqdm
-from ddsp.vocoder import F0_Extractor, Volume_Extractor, Units_Encoder
+from ddsp.vocoder import F0_Extractor, Volume_Extractor, Units_Encoder, SpeakerEncoder
 from diffusion.vocoder import Vocoder
 from logger.utils import traverse_dir
 import concurrent.futures
+
 
 def parse_args(args=None, namespace=None):
     """Parse command-line arguments."""
@@ -31,8 +32,10 @@ def parse_args(args=None, namespace=None):
         required=False,
         help="cpu or cuda, auto if not set")
     return parser.parse_args(args=args, namespace=namespace)
-    
-def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = 'cuda', use_pitch_aug = False, extensions = ['wav']):
+
+
+def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size,
+               device='cuda', use_pitch_aug=False, extensions=['wav'], speaker_encoder=None):
     
     path_srcdir  = os.path.join(path, 'audio')
     path_unitsdir  = os.path.join(path, 'units')
@@ -42,6 +45,7 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
     path_meldir  = os.path.join(path, 'mel')
     path_augmeldir  = os.path.join(path, 'aug_mel')
     path_skipdir = os.path.join(path, 'skip')
+    path_spk_embdir = os.path.join(path, 'spk_emb')
     
     # list files
     filelist =  traverse_dir(
@@ -65,6 +69,7 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
         path_melfile = os.path.join(path_meldir, binfile)
         path_augmelfile = os.path.join(path_augmeldir, binfile)
         path_skipfile = os.path.join(path_skipdir, file)
+        path_spk_embfile = os.path.join(path_spk_embdir, binfile)
         
         # load audio
         audio, _ = librosa.load(path_srcfile, sr=sample_rate)
@@ -96,7 +101,14 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
         # units encode
         units_t = units_encoder.encode(audio_t, sample_rate, hop_size)
         units = units_t.squeeze().to('cpu').numpy()
-        
+        units_len = units.shape[0]
+
+        # speaker encode
+        spk_emb = None
+        if speaker_encoder is not None:
+            spk_emb_t = speaker_encoder(audio=audio, audio_t=audio_t, sample_rate=sample_rate)
+            spk_emb = np.tile(spk_emb_t, (units_len, 1))
+
         # extract f0
         f0 = f0_extractor.extract(audio, uv_interp = False)
         
@@ -120,6 +132,11 @@ def preprocess(path, f0_extractor, volume_extractor, mel_extractor, units_encode
                 np.save(path_augmelfile, aug_mel)
                 os.makedirs(os.path.dirname(path_augvolfile), exist_ok=True)
                 np.save(path_augvolfile, aug_vol)
+            if speaker_encoder is not None:
+                os.makedirs(os.path.dirname(path_spk_embfile), exist_ok=True)
+                np.save(path_spk_embfile, spk_emb)
+                os.makedirs(os.path.dirname(path_unitsfile), exist_ok=True)
+                np.save(path_unitsfile, units)
         else:
             print('\n[Error] F0 extraction failed: ' + path_srcfile)
             os.makedirs(os.path.dirname(path_skipfile), exist_ok=True)
@@ -188,11 +205,37 @@ if __name__ == '__main__':
                         args.data.encoder_sample_rate, 
                         args.data.encoder_hop_size,
                         cnhubertsoft_gate=cnhubertsoft_gate,
-                        device = device)    
+                        device = device)
+
+    # initialize speaker encoder
+    speaker_encoder = None
+    if args.model.use_speaker_encoder:
+        speaker_encoder = SpeakerEncoder(args.data.speaker_encoder, args.data.speaker_encoder_config,
+                                         args.data.speaker_encoder_ckpt, args.data.speaker_encoder_sample_rate,
+                                         device=device)
     
     # preprocess training set
-    preprocess(args.data.train_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device, use_pitch_aug = use_pitch_aug, extensions = extensions)
-    
+    preprocess(args.data.train_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size,
+               device=device, use_pitch_aug=use_pitch_aug, extensions=extensions, speaker_encoder=speaker_encoder)
+
     # preprocess validation set
-    preprocess(args.data.valid_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size, device = device, use_pitch_aug = False, extensions = extensions)
-    
+    preprocess(args.data.valid_path, f0_extractor, volume_extractor, mel_extractor, units_encoder, sample_rate, hop_size,
+               device=device, use_pitch_aug=False, extensions=extensions, speaker_encoder=speaker_encoder)
+
+    # get spk_emb_dict
+    spk_emb_path = os.path.join(args.data.train_path, 'spk_emb')
+    speaker_id_list = os.listdir(spk_emb_path)
+    spk_emb_dict = {}
+    for speaker_id_str in speaker_id_list:
+        spk_emb_each_path = os.path.join(spk_emb_path, speaker_id_str)
+        _temp_emb = None
+        for spk_emb_bin in os.listdir(spk_emb_each_path):
+            spk_emb_bin_path = os.path.join(spk_emb_each_path, spk_emb_bin)
+            if _temp_emb is None:
+                _temp_emb = np.load(spk_emb_bin_path)
+            else:
+                __temp_emb = np.load(spk_emb_bin_path)
+                _temp_emb = np.concatenate([__temp_emb, _temp_emb], axis=0)
+        spk_emb_dict[speaker_id_str] = np.mean(_temp_emb, axis=0)
+    np.save(os.path.join(args.data.train_path, 'spk_emb_dict.npy'), spk_emb_dict)
+    np.save(os.path.join(args.data.valid_path, 'spk_emb_dict.npy'), spk_emb_dict)
