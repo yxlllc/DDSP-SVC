@@ -42,7 +42,8 @@ def test(args, model, vocoder, loader_test, saver):
                     gt_spec=None,
                     infer=True, 
                     infer_speedup=args.infer.speedup, 
-                    method=args.infer.method)
+                    method=args.infer.method,
+                    spk_emb=data['spk_emb'])
             signal = vocoder.infer(mel, data['f0'])
             ed_time = time.time()
                         
@@ -61,7 +62,8 @@ def test(args, model, vocoder, loader_test, saver):
                     data['volume'], 
                     data['spk_id'], 
                     gt_spec=data['mel'],
-                    infer=False)
+                    infer=False,
+                    spk_emb=data['spk_emb'])
                 test_loss += loss.item()
             
             # log mel
@@ -120,11 +122,11 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
             # forward
             if dtype == torch.float32:
                 loss = model(data['units'].float(), data['f0'], data['volume'], data['spk_id'], 
-                                aug_shift = data['aug_shift'], gt_spec=data['mel'].float(), infer=False)
+                                aug_shift = data['aug_shift'], gt_spec=data['mel'].float(), infer=False,spk_emb=data['spk_emb'])
             else:
                 with autocast(device_type=args.device, dtype=dtype):
                     loss = model(data['units'], data['f0'], data['volume'], data['spk_id'], 
-                                    aug_shift = data['aug_shift'], gt_spec=data['mel'], infer=False)
+                                    aug_shift = data['aug_shift'], gt_spec=data['mel'], infer=False,spk_emb=data['spk_emb'])
             
             # handle nan loss
             if torch.isnan(loss):

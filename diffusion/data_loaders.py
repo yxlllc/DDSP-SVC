@@ -61,7 +61,9 @@ def get_data_loaders(args, whole_audio=False):
         n_spk=args.model.n_spk,
         device=args.train.cache_device,
         fp16=args.train.cache_fp16,
-        use_aug=True)
+        use_aug=True,
+        use_spk_encoder=args.model.use_speaker_encoder,
+        spk_encoder_mode=args.data.speaker_encoder_mode)
     loader_train = torch.utils.data.DataLoader(
         data_train ,
         batch_size=args.train.batch_size if not whole_audio else 1,
@@ -78,7 +80,9 @@ def get_data_loaders(args, whole_audio=False):
         load_all_data=args.train.cache_all_data,
         whole_audio=True,
         extensions=args.data.extensions,
-        n_spk=args.model.n_spk)
+        n_spk=args.model.n_spk,
+        use_spk_encoder=args.model.use_speaker_encoder,
+        spk_encoder_mode=args.data.speaker_encoder_mode)
     loader_valid = torch.utils.data.DataLoader(
         data_valid,
         batch_size=1,
@@ -103,6 +107,8 @@ class AudioDataset(Dataset):
         device='cpu',
         fp16=False,
         use_aug=False,
+        use_spk_encoder=False,
+        spk_encoder_mode='each_spk'
     ):
         super().__init__()
         
@@ -110,6 +116,8 @@ class AudioDataset(Dataset):
         self.sample_rate = sample_rate
         self.hop_size = hop_size
         self.path_root = path_root
+        self.use_spk_encoder = use_spk_encoder
+        self.spk_encoder_mode = spk_encoder_mode
         self.paths = traverse_dir(
             os.path.join(path_root, 'audio'),
             extensions=extensions,
@@ -144,12 +152,12 @@ class AudioDataset(Dataset):
                         
             if n_spk is not None and n_spk > 1:
                 dirname_split = re.split(r"_|\-", os.path.dirname(name_ext), 2)[0]
-                spk_id = int(dirname_split) if str.isdigit(dirname_split) else 0
+                t_spk_id = spk_id = int(dirname_split) if str.isdigit(dirname_split) else 0
                 if spk_id < 1 or spk_id > n_spk:
                     raise ValueError(' [x] Muiti-speaker traing error : spk_id must be a positive integer from 1 to n_spk ')
             else:
                 spk_id = 1
-            spk_id = torch.LongTensor(np.array([spk_id])).to(device)
+            t_spk_id = spk_id = torch.LongTensor(np.array([spk_id])).to(device)
 
             if load_all_data:
                 '''
@@ -168,12 +176,26 @@ class AudioDataset(Dataset):
                 
                 path_units = os.path.join(self.path_root, 'units', name_ext) + '.npy'
                 units = np.load(path_units)
+                units_len = units.shape[0]
                 units = torch.from_numpy(units).to(device)
+
+                spk_emb = None
+                if use_spk_encoder and (spk_encoder_mode == 'each_spk'):
+                    path_spk_emb_dict = os.path.join(self.path_root, 'spk_emb_dict') + '.npy'
+                    spk_emb = np.load(path_spk_emb_dict)[str(t_spk_id)]
+                    spk_emb = np.tile(spk_emb, (units_len, 1))
+                    spk_emb = torch.from_numpy(spk_emb).to(device)
+
+                if use_spk_encoder and (spk_encoder_mode=='each_wav'):
+                    path_spk_emb = os.path.join(self.path_root, 'spk_emb', name_ext) + '.npy'
+                    spk_emb = np.load(path_spk_emb)
+                    spk_emb = torch.from_numpy(spk_emb).to(device)
                 
                 if fp16:
                     mel = mel.half()
                     aug_mel = aug_mel.half()
                     units = units.half()
+                    spk_emb = spk_emb.half()
                     
                 self.data_buffer[name_ext] = {
                         'duration': duration,
@@ -183,7 +205,8 @@ class AudioDataset(Dataset):
                         'f0': f0,
                         'volume': volume,
                         'aug_vol': aug_vol,
-                        'spk_id': spk_id
+                        'spk_id': spk_id,
+                        'spk_emb': spk_emb
                         }
             else:
                 self.data_buffer[name_ext] = {
@@ -249,10 +272,26 @@ class AudioDataset(Dataset):
         if units is None:
             units = os.path.join(self.path_root, 'units', name_ext) + '.npy'
             units = np.load(units)
+            units_len = units.shape[0]
             units = units[start_frame : start_frame + units_frame_len]
             units = torch.from_numpy(units).float() 
         else:
             units = units[start_frame : start_frame + units_frame_len]
+
+        # load spk_emb
+        spk_emb = data_buffer.get('spk_emb')
+        if self.use_spk_encoder:
+            if spk_emb is None:
+                spk_emb = os.path.join(self.path_root, 'spk_emb', name_ext) + '.npy'
+                if self.spk_encoder_mode=='each_wav':
+                    spk_emb = np.load(spk_emb)
+                elif self.spk_encoder_mode=='each_spk':
+                    spk_emb = np.load(spk_emb)
+                    spk_emb = np.tile(spk_emb, (units_len, 1))
+                spk_emb = spk_emb[start_frame : start_frame + units_frame_len]
+                spk_emb = torch.from_numpy(spk_emb).float()
+            else:
+                spk_emb = spk_emb[start_frame : start_frame + units_frame_len]
 
         # load f0
         f0 = data_buffer.get('f0')
@@ -272,7 +311,8 @@ class AudioDataset(Dataset):
         # load shift
         aug_shift = torch.from_numpy(np.array([[aug_shift]])).float()
         
-        return dict(mel=mel, f0=f0_frames, volume=volume_frames, units=units, spk_id=spk_id, aug_shift=aug_shift, name=name, name_ext=name_ext)
+        return dict(mel=mel, f0=f0_frames, volume=volume_frames, units=units, spk_id=spk_id, aug_shift=aug_shift,
+                    name=name, name_ext=name_ext,spk_emb=spk_emb)
 
     def __len__(self):
         return len(self.paths)
