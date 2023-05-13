@@ -182,8 +182,9 @@ class AudioDataset(Dataset):
 
                 spk_emb = None
                 if use_spk_encoder and (spk_encoder_mode == 'each_spk'):
-                    path_spk_emb_dict = os.path.join(self.path_root, 'spk_emb_dict') + '.npy'
-                    spk_emb = np.load(path_spk_emb_dict)[str(t_spk_id)]
+                    path_spk_emb_dict = os.path.join(self.path_root, 'spk_emb_dict.npy')
+                    spk_emb = np.load(path_spk_emb_dict, allow_pickle=True).item()
+                    spk_emb = spk_emb[str(t_spk_id)]
                     spk_emb = np.tile(spk_emb, (units_len, 1))
                     spk_emb = torch.from_numpy(spk_emb).to(device)
 
@@ -207,6 +208,7 @@ class AudioDataset(Dataset):
                         'volume': volume,
                         'aug_vol': aug_vol,
                         'spk_id': spk_id,
+                        't_spk_id': t_spk_id,
                         'spk_emb': spk_emb
                         }
             else:
@@ -215,7 +217,8 @@ class AudioDataset(Dataset):
                         'f0': f0,
                         'volume': volume,
                         'aug_vol': aug_vol,
-                        'spk_id': spk_id
+                        'spk_id': spk_id,
+                        't_spk_id': t_spk_id
                         }
            
 
@@ -287,7 +290,10 @@ class AudioDataset(Dataset):
                 if self.spk_encoder_mode=='each_wav':
                     spk_emb = np.load(spk_emb)
                 elif self.spk_encoder_mode=='each_spk':
-                    spk_emb = np.load(spk_emb)
+                    path_spk_emb_dict = os.path.join(self.path_root, 'spk_emb_dict.npy')
+                    t_spk_id = data_buffer.get('t_spk_id')
+                    spk_emb = np.load(path_spk_emb_dict, allow_pickle=True).item()
+                    spk_emb = spk_emb[str(t_spk_id)]
                     spk_emb = np.tile(spk_emb, (units_len, 1))
                 spk_emb = spk_emb[start_frame : start_frame + units_frame_len]
                 spk_emb = torch.from_numpy(spk_emb).float()
