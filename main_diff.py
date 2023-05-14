@@ -9,7 +9,7 @@ import parselmouth
 import hashlib
 from ast import literal_eval
 from slicer import Slicer
-from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
+from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder, SpeakerEncoder
 from ddsp.core import upsample
 from diffusion.unit2mel import load_model_vocoder
 from tqdm import tqdm
@@ -167,7 +167,7 @@ def parse_args(args=None, namespace=None):
         type=str,
         required=False,
         default=None,
-        help="path to the spk_emb file for diff, must be .npy",
+        help="path to the spk_emb file or extracted wav for diff, must be .wav or .npy",
     )
     return parser.parse_args(args=args, namespace=namespace)
 
@@ -299,19 +299,32 @@ if __name__ == '__main__':
     # speak_encoder
     else:
         print('Speaker Encode Mode')
+        speaker_encoder = SpeakerEncoder(args.data.speaker_encoder, args.data.speaker_encoder_config,
+                                         args.data.speaker_encoder_ckpt, args.data.speaker_encoder_sample_rate,
+                                         device=device)
         spk_mix_dict = literal_eval(cmd.spk_mix_dict)
         spk_id = int(cmd.spk_id)
         diff_spk_id = spk_id
         if cmd.diff_spk_id != 'auto':
             diff_spk_id = int(cmd.diff_spk_id)
+
         if cmd.diff_spk_emb is not None:
-            diff_spk_emb = np.load(cmd.diff_spk_emb)
+            if cmd.diff_spk_emb[-4:] == '.npy':
+                diff_spk_emb = np.load(cmd.diff_spk_emb)
+                print(f"Load spk_emb from {cmd.diff_spk_emb} for spk_emb")
+            else:
+                spk_emb_audio, spk_emb_sample_rate = librosa.load(cmd.diff_spk_emb, sr=None)
+                if len(spk_emb_audio.shape) > 1:
+                    spk_audio = librosa.to_mono(spk_emb_audio)
+                diff_spk_emb = speaker_encoder(audio=spk_emb_audio, sample_rate=spk_emb_sample_rate)
+                print(f"Load audio from {cmd.diff_spk_emb} for spk_emb")
             if len(diff_spk_emb.shape) > 1:
                 diff_spk_emb = np.mean(diff_spk_emb, axis=0)
         else:
             path_diff_spk_emb_dict = os.path.join(os.path.split(cmd.diff_ckpt)[0], 'spk_emb_dict.npy')
             diff_spk_emb = np.load(path_diff_spk_emb_dict, allow_pickle=True).item()
             diff_spk_emb = diff_spk_emb[str(diff_spk_id)]
+            print(f"Load speaker {diff_spk_id} in diff_spk_emb_dict")
         spk_id = torch.LongTensor(np.array([[spk_id]])).to(device)
         if spk_mix_dict is not None:
             raise ValueError("声纹模式暂不支持说话人混合，很快就写，咕咕咕")
