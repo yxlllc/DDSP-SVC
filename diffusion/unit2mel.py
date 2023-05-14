@@ -35,7 +35,10 @@ def load_model_vocoder(
                 vocoder.dimension,
                 args.model.n_layers,
                 args.model.n_chans,
-                args.model.n_hidden)
+                args.model.n_hidden,
+                use_speaker_encoder=args.model.use_speaker_encoder,
+                speaker_encoder_out_channels=args.data.speaker_encoder_out_channels
+    )
     
     print(' [Loading] ' + model_path)
     ckpt = torch.load(model_path, map_location=torch.device(device))
