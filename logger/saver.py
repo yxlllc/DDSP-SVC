@@ -43,6 +43,12 @@ class Saver(object):
         with open(path_config, "w") as out_config:
             yaml.dump(dict(args), out_config)
 
+        # save spk_emb_dict
+        import numpy as np
+        path_from_spk_emb_dict = os.path.join(args.data.train_path, 'spk_emb_dict.npy')
+        path_save_spk_emb_dict = os.path.join(self.expdir, 'spk_emb_dict.npy')
+        temp_spk_emb_dict = np.load(path_from_spk_emb_dict, allow_pickle=True).item()
+        np.save(path_save_spk_emb_dict, temp_spk_emb_dict)
 
     def log_info(self, msg):
         '''log method'''
