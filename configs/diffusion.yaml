@@ -9,8 +9,8 @@ data:
   cnhubertsoft_gate: 10 # only use with cnhubertsoftfish
   encoder_sample_rate: 16000
   encoder_hop_size: 320
-  encoder_out_channels: 256 # 768 if using 'hubertbase768', 'contentvec768' or 'contentvec768l12' encoder
-  encoder_ckpt: pretrain/hubert/hubert-soft-0d54a1f4.pt
+  encoder_out_channels: 768 # 256 if using 'hubertsoft'
+  encoder_ckpt: pretrain/contentvec/checkpoint_best_legacy_500.pt
   speaker_encoder: 'ge2e' # only use use_speaker_encoder
   speaker_encoder_sample_rate: 16000
   speaker_encoder_out_channels: 256
