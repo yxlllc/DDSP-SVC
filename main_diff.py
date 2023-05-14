@@ -309,7 +309,7 @@ if __name__ == '__main__':
             if len(diff_spk_emb.shape) > 1:
                 diff_spk_emb = np.mean(diff_spk_emb, axis=0)
         else:
-            path_diff_spk_emb_dict = os.path.join(os.path.split(cmd.diff_ckpt)[0], 'config.yaml')
+            path_diff_spk_emb_dict = os.path.join(os.path.split(cmd.diff_ckpt)[0], 'spk_emb_dict.npy')
             diff_spk_emb = np.load(path_diff_spk_emb_dict, allow_pickle=True).item()
             diff_spk_emb = diff_spk_emb[str(diff_spk_id)]
         spk_id = torch.LongTensor(np.array([[spk_id]])).to(device)
@@ -362,7 +362,7 @@ if __name__ == '__main__':
             start_frame = segment[0]
             seg_input = torch.from_numpy(segment[1]).float().unsqueeze(0).to(device)
             seg_units = units_encoder.encode(seg_input, sample_rate, hop_size)
-            seg_diff_spk_emb = np.tile(seg_diff_spk_emb, (len(seg_units), 1))
+            seg_diff_spk_emb = np.tile(diff_spk_emb, (len(seg_units), 1))
             seg_diff_spk_emb = torch.from_numpy(seg_diff_spk_emb).float().to(device)
            
             seg_f0 = f0[:, start_frame : start_frame + seg_units.size(1), :]
