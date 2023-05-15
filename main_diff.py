@@ -169,6 +169,14 @@ def parse_args(args=None, namespace=None):
         default=None,
         help="path to the spk_emb file or extracted wav for diff, must be .wav or .npy",
     )
+    parser.add_argument(
+        "-dspkembdict",
+        "--diff_spk_emb_dict",
+        type=str,
+        required=False,
+        default=None,
+        help="path to the spk_emb_dict file or , must be .npy",
+    )
     return parser.parse_args(args=args, namespace=namespace)
 
     
@@ -283,6 +291,7 @@ if __name__ == '__main__':
                         device = device)
                             
     # speaker id or mix-speaker dictionary
+    diff_spk_emb_dict = None
     if not args.model.use_speaker_encoder:
         spk_mix_dict = literal_eval(cmd.spk_mix_dict)
         spk_id = torch.LongTensor(np.array([[int(cmd.spk_id)]])).to(device)
@@ -321,13 +330,14 @@ if __name__ == '__main__':
             if len(diff_spk_emb.shape) > 1:
                 diff_spk_emb = np.mean(diff_spk_emb, axis=0)
         else:
-            path_diff_spk_emb_dict = os.path.join(os.path.split(cmd.diff_ckpt)[0], 'spk_emb_dict.npy')
-            diff_spk_emb = np.load(path_diff_spk_emb_dict, allow_pickle=True).item()
-            diff_spk_emb = diff_spk_emb[str(diff_spk_id)]
+            if cmd.diff_spk_emb_dict is not None:
+                path_diff_spk_emb_dict = cmd.diff_spk_emb_dict
+            else:
+                path_diff_spk_emb_dict = os.path.join(os.path.split(cmd.diff_ckpt)[0], 'spk_emb_dict.npy')
+            diff_spk_emb_dict = np.load(path_diff_spk_emb_dict, allow_pickle=True).item()
+            diff_spk_emb = diff_spk_emb_dict[str(diff_spk_id)]
             print(f"Load speaker {diff_spk_id} in diff_spk_emb_dict")
         spk_id = torch.LongTensor(np.array([[spk_id]])).to(device)
-        if spk_mix_dict is not None:
-            raise ValueError("声纹模式暂不支持说话人混合，很快就写，咕咕咕")
 
     # speed up
     if cmd.speedup == 'auto':
@@ -401,7 +411,8 @@ if __name__ == '__main__':
                     infer_speedup=infer_speedup, 
                     method=method,
                     k_step=k_step,
-                    spk_emb=seg_diff_spk_emb)
+                    spk_emb=seg_diff_spk_emb,
+                    spk_emb_dict=diff_spk_emb_dict)
             seg_output = vocoder.infer(seg_mel, seg_f0)
             seg_output *= mask[:, start_frame * args.data.block_size : (start_frame + seg_units.size(1)) * args.data.block_size]
             seg_output = seg_output.squeeze().cpu().numpy()
