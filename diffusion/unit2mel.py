@@ -75,13 +75,13 @@ class Unit2Mel(nn.Module):
         else:
             if n_spk is not None and n_spk > 1:
                 self.spk_embed = nn.Embedding(n_spk, n_hidden)
-            
+
         # diffusion
         self.decoder = GaussianDiffusion(WaveNet(out_dims, n_layers, n_chans, n_hidden), out_dims=out_dims)
 
     def forward(self, units, f0, volume, spk_id = None, spk_mix_dict = None, aug_shift = None,
                 gt_spec=None, infer=True, infer_speedup=10, method='dpm-solver', k_step=300, use_tqdm=True,
-                spk_emb=None):
+                spk_emb=None, spk_emb_dict=None, tags_embed_dict=None):
         
         '''
         input: 
@@ -92,7 +92,15 @@ class Unit2Mel(nn.Module):
 
         x = self.unit_embed(units) + self.f0_embed((1+ f0 / 700).log()) + self.volume_embed(volume)
         if self.use_speaker_encoder:
-            x = x + self.spk_embed(spk_emb)
+            if spk_mix_dict is not None:
+                assert spk_emb_dict is not None
+                for k, v in spk_mix_dict.items():
+                    spk_id_torch = spk_emb_dict[str(k)]
+                    spk_id_torch = np.tile(spk_id_torch, (len(units), 1))
+                    spk_id_torch = torch.from_numpy(spk_id_torch).float().to(units.device)
+                    x = x + v * self.spk_embed(spk_id_torch)
+            else:
+                x = x + self.spk_embed(spk_emb)
         else:
             if self.n_spk is not None and self.n_spk > 1:
                 if spk_mix_dict is not None:
@@ -102,7 +110,8 @@ class Unit2Mel(nn.Module):
                 else:
                     x = x + self.spk_embed(spk_id - 1)
         if self.aug_shift_embed is not None and aug_shift is not None:
-            x = x + self.aug_shift_embed(aug_shift / 5) 
+            x = x + self.aug_shift_embed(aug_shift / 5)
+
         x = self.decoder(x, gt_spec=gt_spec, infer=infer, infer_speedup=infer_speedup, method=method, k_step=k_step, use_tqdm=use_tqdm)
     
         return x
