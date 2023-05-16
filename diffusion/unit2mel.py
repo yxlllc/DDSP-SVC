@@ -81,7 +81,7 @@ class Unit2Mel(nn.Module):
 
     def forward(self, units, f0, volume, spk_id = None, spk_mix_dict = None, aug_shift = None,
                 gt_spec=None, infer=True, infer_speedup=10, method='dpm-solver', k_step=300, use_tqdm=True,
-                spk_emb=None, spk_emb_dict=None, tags_embed_dict=None):
+                spk_emb=None, spk_emb_dict=None):
         
         '''
         input: 
