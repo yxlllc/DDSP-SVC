@@ -10,7 +10,7 @@ from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encod
 from ddsp.core import upsample
 import time
 from gui_diff_locale import I18nAuto
-from diffusion.infer_gt_mel import DiffGtMel
+from diffusion.infer_gt_mel import DiffGtMel, get_args_only
 
 
 def phase_vocoder(a, b, fade_out, fade_in):
@@ -48,9 +48,13 @@ class SvcDDSP:
 
         # load ddsp model
         if self.model is None or self.model_path != model_path:
-            self.model, self.args = load_model(model_path, device=self.device)
-            self.model_path = model_path
-
+            if cmd.mode == 'auto':
+                self.model, self.args = load_model(model_path, device=self.device)
+                self.model_path = model_path
+            else:
+                self.model = None
+                self.args = get_args_only(model_path)
+                self.model_path = model_path
             # load units encoder
             if self.units_encoder is None or self.args.data.encoder != self.encoder_type or self.args.data.encoder_ckpt != self.encoder_ckpt:
                 if self.args.data.encoder == 'cnhubertsoftfish':
@@ -68,10 +72,13 @@ class SvcDDSP:
                 self.encoder_ckpt = self.args.data.encoder_ckpt
 
         # load enhancer
-        if self.enhancer is None or self.args.enhancer.type != self.enhancer_type or self.args.enhancer.ckpt != self.enhancer_ckpt:
-            self.enhancer = Enhancer(self.args.enhancer.type, self.args.enhancer.ckpt, device=self.device)
-            self.enhancer_type = self.args.enhancer.type
-            self.enhancer_ckpt = self.args.enhancer.ckpt
+        if cmd.mode == 'auto':
+            if self.enhancer is None or self.args.enhancer.type != self.enhancer_type or self.args.enhancer.ckpt != self.enhancer_ckpt:
+                self.enhancer = Enhancer(self.args.enhancer.type, self.args.enhancer.ckpt, device=self.device)
+                self.enhancer_type = self.args.enhancer.type
+                self.enhancer_ckpt = self.args.enhancer.ckpt
+        else:
+            self.enhancer = None
 
     def infer(self,
               audio,
@@ -135,20 +142,24 @@ class SvcDDSP:
 
         # spk_id or spk_mix_dict
         spk_id = torch.LongTensor(np.array([[spk_id]])).to(self.device)
-        diff_spk_id = torch.LongTensor(np.array([[diff_spk_id]])).to(self.device)
         dictionary = None
         if use_spk_mix:
             dictionary = spk_mix_dict
 
             # forward and return the output
         with torch.no_grad():
-            output, _, (s_h, s_n) = self.model(units, f0, volume, spk_id=spk_id, spk_mix_dict=dictionary)
-            if diff_use and diff_model is not None:
-                output = diff_model.infer(output, f0, units, volume, acc=diff_acc, spk_id=diff_spk_id,
-                                          k_step=k_step, method=diff_method, silence_front=silence_front, use_silence=diff_silence,
-                                          spk_mix_dict=dictionary)
+            if cmd.mode == 'autp':
+                output, _, (s_h, s_n) = self.model(units, f0, volume, spk_id=spk_id, spk_mix_dict=dictionary)
+                if diff_use and diff_model is not None:
+                    output = diff_model.infer(output, f0, units, volume, acc=diff_acc, spk_id=int(diff_spk_id),
+                                              k_step=k_step, method=diff_method, silence_front=silence_front,
+                                              use_silence=diff_silence, spk_mix_dict=dictionary)
+            else:
+                output = diff_model.infer(None, f0, units, volume, acc=diff_acc, spk_id=int(diff_spk_id),
+                                          k_step=k_step, method=diff_method, silence_front=silence_front,
+                                          use_silence=diff_silence, spk_mix_dict=dictionary)
             output *= mask
-            if use_enhancer and not diff_use:
+            if (use_enhancer and not diff_use) and (cmd.mode == 'auto'):
                 output, output_sample_rate = self.enhancer.enhance(
                     output,
                     self.args.data.sampling_rate,
@@ -161,7 +172,7 @@ class SvcDDSP:
 
             output = output.squeeze()
             if audio_alignment:
-                output[:audio_length]
+                output = output[:audio_length]
             return output, output_sample_rate
 
 
@@ -445,7 +456,8 @@ class GUI:
         self.fade_out_window = 1 - self.fade_in_window
         self.svc_model.update_model(self.config.checkpoint_path)
         if self.config.diff_use:
-            self.diff_model.flush_model(self.config.diff_project, ddsp_config=self.svc_model.args)
+            self.diff_model.flush_model(self.config.diff_project, ddsp_config=self.svc_model.args,
+                                        spk_emb_dict_path=diff_spk_emb_dict_path, spk_emb_path=diff_spk_emb_path)
         thread_vc = threading.Thread(target=self.soundinput)
         thread_vc.start()
 
@@ -509,8 +521,8 @@ class GUI:
                 self.resample_kernel[key_str] = Resample(_model_sr, self.config.samplerate,
                                                          lowpass_filter_width=128).to(self.device)
             _audio = self.resample_kernel[key_str](_audio)
-        temp_wav = _audio[
-                   - self.block_frame - self.crossfade_frame - self.sola_search_frame - self.last_delay_frame: - self.last_delay_frame]
+        temp_wav = _audio[- self.block_frame - self.crossfade_frame - self.sola_search_frame - self.last_delay_frame
+                          : - self.last_delay_frame]
 
         # sola shift
         conv_input = temp_wav[None, None, : self.crossfade_frame + self.sola_search_frame]
@@ -574,6 +586,44 @@ class GUI:
         print("output device:" + str(sd.default.device[1]) + ":" + str(output_device))
 
 
+def parse_args(args=None, namespace=None):
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-dspkemb",
+        "--diff_spk_emb",
+        type=str,
+        required=False,
+        default=None,
+        help="path to the spk_emb file or extracted wav for diff , must be .wav or .npy, it'll cover spk_id ",
+    )
+    parser.add_argument(
+        "-dspkembdict",
+        "--diff_spk_emb_dict",
+        type=str,
+        required=False,
+        default=None,
+        help="path to the spk_emb_dict file for covering default spk_emb_dict, must be .npy",
+    )
+    parser.add_argument(
+        "-m",
+        "--mode",
+        type=str,
+        required=False,
+        default='auto',
+        help="auto or diff-only, diff-only will ignore ddsp, but still need a model path for load encoder."
+             " you can choise your diff model as ddsp model only for load encoder when diff-onlg. | default: auto",
+    )
+    return parser.parse_args(args=args, namespace=namespace)
+
+
 if __name__ == "__main__":
+    cmd = parse_args()
+    diff_spk_emb_dict_path = None
+    diff_spk_emb_path = None
+    if cmd.diff_spk_emb_dict is not None:
+        diff_spk_emb_dict_path = cmd.diff_spk_emb_dict
+    if cmd.diff_spk_emb is not None:
+        diff_spk_emb_path = cmd.diff_spk_emb
     i18n = I18nAuto()
     gui = GUI()

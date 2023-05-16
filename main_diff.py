@@ -175,7 +175,7 @@ def parse_args(args=None, namespace=None):
         type=str,
         required=False,
         default=None,
-        help="path to the spk_emb_dict file or , must be .npy",
+        help="path to the spk_emb_dict file for covering default spk_emb_dict, must be .npy",
     )
     return parser.parse_args(args=args, namespace=namespace)
 
@@ -324,7 +324,7 @@ if __name__ == '__main__':
             else:
                 spk_emb_audio, spk_emb_sample_rate = librosa.load(cmd.diff_spk_emb, sr=None)
                 if len(spk_emb_audio.shape) > 1:
-                    spk_audio = librosa.to_mono(spk_emb_audio)
+                    spk_emb_audio = librosa.to_mono(spk_emb_audio)
                 diff_spk_emb = speaker_encoder(audio=spk_emb_audio, sample_rate=spk_emb_sample_rate)
                 print(f"Load audio from {cmd.diff_spk_emb} for spk_emb")
             if len(diff_spk_emb.shape) > 1:
