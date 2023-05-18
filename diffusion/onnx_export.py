@@ -151,7 +151,8 @@ class Unit2Mel(nn.Module):
                     "hubert": [1],
                     "f0": [1],
                     "volume": [1],
-                    "mel2ph": [1]
+                    "mel2ph": [1],
+                    "spk_mix": [0],
                 },
                 opset_version=16
             )
