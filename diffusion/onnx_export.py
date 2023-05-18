@@ -72,7 +72,7 @@ class Unit2Mel(nn.Module):
     
         
 
-    def forward(self, units, mel2ph, f0, volume, spk_mix = None):
+    def forward(self, units, mel2ph, f0, volume, g = None):
         
         '''
         input: 
@@ -81,19 +81,24 @@ class Unit2Mel(nn.Module):
             dict of B x n_frames x feat
         '''
 
-        # decoder_inp = F.pad(units, [0, 0, 1, 0])
+        decoder_inp = F.pad(units, [0, 0, 1, 0])
         mel2ph_ = mel2ph.unsqueeze(2).repeat([1, 1, units.shape[-1]])
-        units = torch.gather(units, 1, mel2ph_)  # [B, T, H]
+        units = torch.gather(decoder_inp, 1, mel2ph_)  # [B, T, H]
 
         x = self.unit_embed(units) + self.f0_embed((1 + f0.unsqueeze(-1) / 700).log()) + self.volume_embed(volume.unsqueeze(-1))
-        spk_mix = spk_mix.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
 
-        if self.n_spk is not None and self.n_spk > 1:
-            spk_embeded = torch.sum(spk_mix * self.speaker_map, dim=0)
-            x = x + spk_embeded
-        return x.transpose(1, 2)
+        if self.n_spk is not None and self.n_spk > 1:   # [N, S]  *  [S, B, 1, H]
+            g = g.reshape((g.shape[0], g.shape[1], 1, 1, 1))  # [N, S, B, 1, 1]
+            g = g * self.speaker_map  # [N, S, B, 1, H]
+            g = torch.sum(g, dim=1) # [N, 1, B, 1, H]
+            g = g.transpose(0, -1).transpose(0, -2).squeeze(0) # [B, H, N]
+            x = x.transpose(1, 2) + g
+            return x
+        else:
+            return x.transpose(1, 2)
+        
 
-    def orgforward(self, units, f0, volume, spk_id = None, spk_mix_dict = None, aug_shift = None,
+    def init_spkembed(self, units, f0, volume, spk_id = None, spk_mix_dict = None, aug_shift = None,
                 gt_spec=None, infer=True, infer_speedup=10, method='dpm-solver', k_step=300, use_tqdm=True):
         
         '''
@@ -114,6 +119,7 @@ class Unit2Mel(nn.Module):
                 x = x + spk_embed_mix
             else:
                 x = x + self.spk_embed(spk_id - 1)
+        self.speaker_map = self.speaker_map.unsqueeze(0)
         self.speaker_map = self.speaker_map.detach()
         return x.transpose(1, 2)
 
@@ -131,7 +137,8 @@ class Unit2Mel(nn.Module):
                 spk_mix.append(1.0/float(self.n_spk))
                 spks.update({i:1.0/float(self.n_spk)})
         spk_mix = torch.tensor(spk_mix)
-        orgouttt = self.orgforward(hubert, f0.unsqueeze(-1), volume.unsqueeze(-1), spk_mix_dict=spks)
+        spk_mix = spk_mix.repeat(n_frames, 1)
+        orgouttt = self.init_spkembed(hubert, f0.unsqueeze(-1), volume.unsqueeze(-1), spk_mix_dict=spks)
         outtt = self.forward(hubert, mel2ph, f0, volume, spk_mix)
         if export_encoder:
             torch.onnx.export(
@@ -144,7 +151,8 @@ class Unit2Mel(nn.Module):
                     "hubert": [1],
                     "f0": [1],
                     "volume": [1],
-                    "mel2ph": [1]
+                    "mel2ph": [1],
+                    "spk_mix": [0],
                 },
                 opset_version=16
             )
