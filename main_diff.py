@@ -151,7 +151,7 @@ def parse_args(args=None, namespace=None):
         type=str,
         required=False,
         default='auto',
-        help="pndm or dpm-solver | default: auto",
+        help="ddim, pndm, dpm-solver or unipc | default: auto",
     )
     parser.add_argument(
         "-kstep",

@@ -20,15 +20,15 @@ model:
   n_layers: 20
   n_chans: 512
   n_hidden: 256
-  use_pitch_aug: true  
+  use_pitch_aug: true 
   n_spk: 1 # max number of different speakers
-device: cuda
+device: cuda # training device
 vocoder:
   type: 'nsf-hifigan'
   ckpt: 'pretrain/nsf_hifigan/model'
 infer:
   speedup: 10
-  method: 'dpm-solver' # 'pndm' or 'dpm-solver'
+  method: 'dpm-solver' # 'ddim', 'pndm', 'dpm-solver' or 'unipc'
 env:
   expdir: exp/diffusion-test
   gpu_id: 0
@@ -40,11 +40,11 @@ train:
   cache_device: 'cpu' # Set to 'cuda' to cache the data into the Graphics-Memory, fastest speed for strong gpu
   cache_fp16: true
   epochs: 100000
-  interval_log: 10
+  interval_log: 1
   interval_val: 2000
   interval_force_save: 10000
   lr: 0.0002
   decay_step: 100000
   gamma: 0.5
   weight_decay: 0
-  save_opt: false
+  save_opt: false  

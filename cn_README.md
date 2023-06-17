@@ -38,7 +38,7 @@ python train.py -c configs/combsub.yaml
 ```bash
 python main_diff.py -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
 ```
-speedup 为加速倍速，method 为 pndm 或者 dpm-solver, kstep 为浅扩散步数，diffid 为扩散模型的说话人id，其他参数与 main.py 含义相同。
+speedup 为加速倍速，method 为 ddim, pndm, dpm-solver 或 unipc, kstep 为浅扩散步数，diffid 为扩散模型的说话人id，其他参数与 main.py 含义相同。
 
 合理的 kstep 约为 100~300，speedup 超过 20 时可能将感知到音质损失。
 

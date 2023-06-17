@@ -147,7 +147,16 @@ class GaussianDiffusion(nn.Module):
         # no noise when t == 0
         nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
-
+    
+    @torch.no_grad()
+    def p_sample_ddim(self, x, t, interval, cond):
+        a_t = extract(self.alphas_cumprod, t, x.shape)
+        a_prev = extract(self.alphas_cumprod, torch.max(t - interval, torch.zeros_like(t)), x.shape)
+        
+        noise_pred = self.denoise_fn(x, t, cond=cond)
+        x_prev = a_prev.sqrt() * (x / a_t.sqrt() + (((1 - a_prev) / a_prev).sqrt()-((1 - a_t) / a_t).sqrt()) * noise_pred)
+        return x_prev
+        
     @torch.no_grad()
     def p_sample_plms(self, x, t, interval, cond, clip_denoised=True, repeat_noise=False):
         """
@@ -210,10 +219,10 @@ class GaussianDiffusion(nn.Module):
     def forward(self, 
                 condition, 
                 gt_spec=None, 
-                infer=True, 
+                infer=True,
                 infer_speedup=10, 
                 method='dpm-solver',
-                k_step=300,
+                k_step=None,
                 use_tqdm=True):
         """
             conditioning diffusion, use fastspeech2 encoder output as the condition
@@ -223,13 +232,17 @@ class GaussianDiffusion(nn.Module):
 
         if not infer:
             spec = self.norm_spec(gt_spec)
-            t = torch.randint(0, self.k_step, (b,), device=device).long()
+            if k_step is None:
+                t_max = self.k_step
+            else:
+                t_max = k_step
+            t = torch.randint(0, t_max, (b,), device=device).long()
             norm_spec = spec.transpose(1, 2)[:, None, :, :]  # [B, 1, M, T]
             return self.p_losses(norm_spec, t, cond=cond)
         else:
             shape = (cond.shape[0], 1, self.out_dims, cond.shape[2])
             
-            if gt_spec is None:
+            if gt_spec is None or k_step is None:
                 t = self.k_step
                 x = torch.randn(shape, device=device)
             else:
@@ -267,7 +280,7 @@ class GaussianDiffusion(nn.Module):
                     # (We recommend singlestep DPM-Solver for unconditional sampling)
                     # You can adjust the `steps` to balance the computation
                     # costs and the sample quality.
-                    dpm_solver = DPM_Solver(model_fn, noise_schedule)
+                    dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
 
                     steps = t // infer_speedup
                     if use_tqdm:
@@ -275,9 +288,50 @@ class GaussianDiffusion(nn.Module):
                     x = dpm_solver.sample(
                         x,
                         steps=steps,
-                        order=3,
+                        order=2,
                         skip_type="time_uniform",
-                        method="singlestep",
+                        method="multistep",
+                    )
+                    if use_tqdm:
+                        self.bar.close()
+                elif method == 'unipc':
+                    from .uni_pc import NoiseScheduleVP, model_wrapper, UniPC
+                    # 1. Define the noise schedule.
+                    noise_schedule = NoiseScheduleVP(schedule='discrete', betas=self.betas[:t])
+
+                    # 2. Convert your discrete-time `model` to the continuous-time
+                    # noise prediction model. Here is an example for a diffusion model
+                    # `model` with the noise prediction type ("noise") .
+                    def my_wrapper(fn):
+                        def wrapped(x, t, **kwargs):
+                            ret = fn(x, t, **kwargs)
+                            if use_tqdm:
+                                self.bar.update(1)
+                            return ret
+
+                        return wrapped
+
+                    model_fn = model_wrapper(
+                        my_wrapper(self.denoise_fn),
+                        noise_schedule,
+                        model_type="noise",  # or "x_start" or "v" or "score"
+                        model_kwargs={"cond": cond}
+                    )
+
+                    # 3. Define uni_pc and sample by multistep UniPC.
+                    # You can adjust the `steps` to balance the computation
+                    # costs and the sample quality.
+                    uni_pc = UniPC(model_fn, noise_schedule, variant='bh2')
+
+                    steps = t // infer_speedup
+                    if use_tqdm:
+                        self.bar = tqdm(desc="sample time step", total=steps)
+                    x = uni_pc.sample(
+                        x,
+                        steps=steps,
+                        order=2,
+                        skip_type="time_uniform",
+                        method="multistep",
                     )
                     if use_tqdm:
                         self.bar.close()
@@ -295,6 +349,22 @@ class GaussianDiffusion(nn.Module):
                     else:
                         for i in reversed(range(0, t, infer_speedup)):
                             x = self.p_sample_plms(
+                                x, torch.full((b,), i, device=device, dtype=torch.long),
+                                infer_speedup, cond=cond
+                            )
+                elif method == 'ddim':
+                    if use_tqdm:
+                        for i in tqdm(
+                                reversed(range(0, t, infer_speedup)), desc='sample time step',
+                                total=t // infer_speedup,
+                        ):
+                            x = self.p_sample_ddim(
+                                x, torch.full((b,), i, device=device, dtype=torch.long),
+                                infer_speedup, cond=cond
+                            )
+                    else:
+                        for i in reversed(range(0, t, infer_speedup)):
+                            x = self.p_sample_ddim(
                                 x, torch.full((b,), i, device=device, dtype=torch.long),
                                 infer_speedup, cond=cond
                             )
