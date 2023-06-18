@@ -5,6 +5,17 @@ Language: **English** [简体中文](./cn_README.md) [한국어](./ko_README.md)
 </div>
 Real-time end-to-end singing voice conversion system based on DDSP (Differentiable Digital Signal Processing）.
 
+## Future plan
+The idea of shallow diffusion proposed by this repository has received widespread attention from the SVC community, so we built a more elegant shallow diffusion project:  [Diffusion-SVC](https://github.com/CNChTu/Diffusion-SVC).
+
+If you want to try the latest shallow diffusion models, you can choose to migrate to this repository, which may perform better on both real-time and non-real-time SVC.
+
+Also, the version 4.1 update of  [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc) has heavily referenced our code. Now you can also use the shallow diffusion model in SO-VITS-SVC.
+
+The reason we created a new repository is that the DDSP section has been completely removed, and yes, shallow diffusion can actually be completely unrelated to DDSP. Unfortunately, DDSP as a technical idea is hardly competitive today, and it hardly produces state-of-the-art results.
+
+Of course, DDSP itself is not without room for improvement, so this repository will continue to update some interesting ideas, which will gradually diverge from the branch of Diffusion-SVC in SO-VITS-SVC.
+
 ## (3.0 - Update) Shallow diffusion model (DDSP + Diff-SVC refactor version)
 ![Diagram](diagram.png)
 

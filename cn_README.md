@@ -5,6 +5,18 @@ Language: [English](./README.md) **简体中文**
 </div>
 基于 DDSP（可微分数字信号处理）的实时端到端歌声转换系统
 
+## 未来计划
+
+本仓库提出的浅扩散的想法得到了 SVC 社区的广泛关注，因此我们构建了一个更优雅的浅扩散项目：[Diffusion-SVC](https://github.com/CNChTu/Diffusion-SVC). 
+
+如果你想尝试最新的浅扩散模型，可以选择迁移至该仓库，它们在实时和非实时 SVC 上都可能有更好的表现. 
+
+另外， [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc) 的 4.1 版本更新也很大程度上参考了我们的代码。现在你也可以在 SO-VITS-SVC 里使用浅扩散模型。
+ 
+之所以我们建立了一个新仓库，是因为 DDSP 的部分已经被完全被移除了，是的，浅扩散实际上可以完全和 DDSP 没关系。很不幸的是，作为一种技术理念的 DDSP 在今天几乎已经没有竞争力，它很难产生最先进的结果。
+
+当然，DDSP 本身也不是没有改进的空间，所以本仓库也会持续更新一些有趣的想法，会与 Diffusion-SVC 和 SO-VITS-SVC 的分支逐渐岔开。
+
 ## （3.0 升级）浅扩散模型 （DDSP + Diff-SVC 重构版）
 ![Diagram](diagram.png)
 
