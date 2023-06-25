@@ -48,4 +48,4 @@ train-diffusion: ## Trains the diffusion model, pass in the model name
 
 tensorboard: ## Start the tensorboard (Run on separate terminal)
 	echo https://tensorboard-$$(hostname).clg07azjl.paperspacegradient.com
-	tensorboard --logdir=exp
+	tensorboard --logdir=exp --bind_all
