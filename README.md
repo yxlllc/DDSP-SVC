@@ -12,7 +12,7 @@ This is a branch of [DDSP_SVC](https://github.com/yxlllc/DDSP-SVC) that adds a M
 7. Run "make train-ddps name=<model_name>" to train the DDSP model
 8. Run "make train-diffusion name=<model_name>" to train the Diffusion model
 
-## 2. Acknowledgement
+## 3. Acknowledgements
 * [DDSP-SVC](https://github.com/yxlllc/DDSP-SVC)
 * [ddsp](https://github.com/magenta/ddsp)
 * [pc-ddsp](https://github.com/yxlllc/pc-ddsp)
