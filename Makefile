@@ -36,7 +36,8 @@ folders:
 extract: ## Unzips the source audio into the model folder
 	unzip $(zip) -d datasets/$(MODEL_NAME)/train/audio/
 
-process: ## Preprocesses the file.
+process: ## Preprocesses the files
+	python draw.py --train ./datasets/$(MODEL_NAME)/train/ --val ./datasets/$(MODEL_NAME)/val/
 	python preprocess.py -c configs/$(MODEL_NAME)/diffusion.yaml
 
 train-ddsp: ## Trains the DDSP, pass in the model name
