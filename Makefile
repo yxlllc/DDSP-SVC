@@ -14,9 +14,17 @@ install: ## Install dependencies (Do everytime you start up a paperspace machine
 	apt-get update
 	apt -y install -qq aria2
 
+folders: 
+	echo Creating folders for model $(name)
+	mkdir configs/$(name)
+	mkdir datasets
+	mkdir datasets/$(name)
+	mkdir datasets/$(name)/train
+	mkdir datasets/$(name)/val
+	mkdir datasets/$(name)/train/audio
+	mkdir datasets/$(name)/val/audio
+
 files: ## Download the required files (only do once)
-	mkdir -p pretrained uvr5_weights
-	git pull
 	aria2c --console-log-level=error -c -x 16 -s 16 -k 1M https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt -d pretrain/hubert
 	aria2c --console-log-level=error -c -x 16 -s 16 -k 1M https://huggingface.co/spaces/Mojobones/base-pt/resolve/main/checkpoint_best_legacy_500.pt -d pretrain/hubert
 	aria2c --console-log-level=error -c -x 16 -s 16 -k 1M https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-v1/nsf_hifigan_20221211.zip -d nsf_hifigan
