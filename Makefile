@@ -19,10 +19,9 @@ install: ## Install dependencies (Do everytime you start up a paperspace machine
 
 files: folders ## Download the required files (only do once)
 	aria2c --console-log-level=error -c -x 16 -s 16 -k 1M https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt -d pretrain/hubert
-	aria2c --console-log-level=error -c -x 16 -s 16 -k 1M https://huggingface.co/spaces/Mojobones/base-pt/resolve/main/checkpoint_best_legacy_500.pt -d pretrain/contentvec
-	aria2c --console-log-level=error -c -x 16 -s 16 -k 1M https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-v1/nsf_hifigan_20221211.zip -d nsf_hifigan
-	unzip -j nsf_hifigan/nsf_hifigan_20221211.zip "nsf_hifigan/*" -d nsf_hifigan
-	folders
+	aria2c --console-log-level=error -c -x 16 -s 16 -k 1M https://huggingface.co/spaces/Mojobones/base-pt/resolve/main/checkpoint_best_legacy_500.pt -d pretrain/contentvec -o checkpoint_best_legacy_500.pt
+	aria2c --console-log-level=error -c -x 16 -s 16 -k 1M https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-v1/nsf_hifigan_20221211.zip -d pretrain/nsf_hifigan
+	unzip -j nsf_hifigan/nsf_hifigan_20221211.zip "nsf_hifigan/*" -d pretrain/nsf_hifigan
 
 folders:
 	echo Creating folders for model $(name)
@@ -37,7 +36,7 @@ folders:
 extract: ## Unzips the source audio into the model folder
 	unzip $(zip) -d datasets/$(MODEL_NAME)/train/audio/
 
-process: ## Preprocesses the file. Pass the model name ex "make preprocess name=<name>"
+process: ## Preprocesses the file.
 	python preprocess.py -c configs/$(MODEL_NAME)/diffusion.yaml
 
 train-ddsp: ## Trains the DDSP, pass in the model name
