@@ -1,7 +1,6 @@
 import argparse
 import numpy as np
 import tqdm
-import matplotlib.pyplot as plt
 import os
 import shutil
 
