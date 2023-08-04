@@ -96,6 +96,7 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
     
     # run
     num_batches = len(loader_train)
+    start_epoch = initial_global_step // num_batches
     model.train()
     saver.log_info('======= start training =======')
     scaler = GradScaler()
@@ -107,7 +108,7 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
         dtype = torch.bfloat16
     else:
         raise ValueError(' [x] Unknown amp_dtype: ' + args.train.amp_dtype)
-    for epoch in range(args.train.epochs):
+    for epoch in range(start_epoch, args.train.epochs):
         for batch_idx, data in enumerate(loader_train):
             saver.global_step_increment()
             optimizer.zero_grad()
