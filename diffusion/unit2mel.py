@@ -71,7 +71,7 @@ class Unit2Mel(nn.Module):
         self.decoder = GaussianDiffusion(WaveNet(out_dims, n_layers, n_chans, n_hidden), out_dims=out_dims)
 
     def forward(self, units, f0, volume, spk_id = None, spk_mix_dict = None, aug_shift = None,
-                gt_spec=None, infer=True, infer_speedup=10, method='dpm-solver', k_step=300, use_tqdm=True):
+                gt_spec=None, infer=True, infer_speedup=10, method='dpm-solver', k_step=None, use_tqdm=True):
         
         '''
         input: 
