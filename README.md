@@ -1,9 +1,26 @@
-Language: **English** [简体中文](./cn_README.md) [한국어](./ko_README.md)
+Language: **English** [简体中文](./cn_README.md) [한국어（outdated）](./ko_README.md)
 # DDSP-SVC
 <div align="center">
 <img src="https://storage.googleapis.com/ddsp/github_images/ddsp_logo.png" width="200px" alt="logo"></img>
 </div>
 Real-time end-to-end singing voice conversion system based on DDSP (Differentiable Digital Signal Processing）.
+
+## (4.0 - test) New DDSP cascade diffusion model
+Data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) is the same as training a pure DDSP model.
+
+(1) Preprocessing：
+```bash
+python preprocess.py -c configs/diffusion-new.yaml
+```
+(2) Train a cascade model (only train one model)：
+```bash
+python train_diff.py -c configs/diffusion-new.yaml
+```
+(3) Non-real-time inference：
+```bash
+python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+```
+'kstep'  needs to be less than or equal to `k_step_max` in the configuration file.
 
 ## Future plan
 The idea of shallow diffusion proposed by this repository has received widespread attention from the SVC community, so we built a more elegant shallow diffusion project:  [Diffusion-SVC](https://github.com/CNChTu/Diffusion-SVC).
@@ -19,7 +36,7 @@ Of course, DDSP itself is not without room for improvement, so this repository w
 ## (3.0 - Update) Shallow diffusion model (DDSP + Diff-SVC refactor version)
 ![Diagram](diagram.png)
 
-Data preparation, configuring the pre-trained encoder (hubert or contentvec ) and vocoder (nsf-hifigan) is the same as training a pure DDSP model.
+Data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) is the same as training a pure DDSP model.
 
 Because the diffusion model is more difficult to train, we provide some pre-trained models here:
 
@@ -97,6 +114,11 @@ UPDATE: python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 works,
 - Vocoder or enhancer:
 
 Download the pre-trained [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-v1/nsf_hifigan_20221211.zip) vocoder and unzip it into `pretrain/` folder.
+
+- Pitch extractor:
+
+Download the pre-trained [RMVPE](https://huggingface.co/datasets/ylzz1997/rmvpe_pretrain_model/resolve/main/rmvpe.pt) extractor, rename it and place it in `pretrain/rmvpe/model.pt`
+
 ## 3. Preprocessing
 
 Put all the training dataset (.wav format audio clips) in the below directory:

@@ -195,7 +195,7 @@ class GUI:
         self.input_wav: np.ndarray = None  # 输入音频规范化后的保存地址
         self.output_wav: np.ndarray = None  # 输出音频规范化后的保存地址
         self.sola_buffer: torch.Tensor = None  # 保存上一个output的crossfade
-        self.f0_mode_list = ["parselmouth", "dio", "harvest", "crepe"]  # F0预测器
+        self.f0_mode_list = ["parselmouth", "dio", "harvest", "crepe", "rmvpe"]  # F0预测器
         self.f_safe_prefix_pad_length: float = 0.0
         self.resample_kernel = {}
         self.launcher()  # start
@@ -248,7 +248,7 @@ class GUI:
                      sg.Slider(range=(1, 20), orientation='h', key='buffernum', resolution=1, default_value=4,
                                enable_events=True)],
                     [sg.Text(i18n("f0预测模式")),
-                     sg.Combo(values=self.f0_mode_list, key='f0_mode', default_value=self.f0_mode_list[2],
+                     sg.Combo(values=self.f0_mode_list, key='f0_mode', default_value=self.f0_mode_list[-1],
                               enable_events=True)],
                     [sg.Checkbox(text=i18n('启用增强器'), default=True, key='use_enhancer', enable_events=True),
                      sg.Checkbox(text=i18n('启用相位声码器'), default=False, key='use_phase_vocoder', enable_events=True)]

@@ -11,7 +11,7 @@ from ast import literal_eval
 from slicer import Slicer
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
 from ddsp.core import upsample
-from diffusion.unit2mel import load_model_vocoder
+from diffusion.vocoder import load_model_vocoder
 from tqdm import tqdm
 
 def check_args(ddsp_args, diff_args):
@@ -102,8 +102,8 @@ def parse_args(args=None, namespace=None):
         "--pitch_extractor",
         type=str,
         required=False,
-        default='crepe',
-        help="pitch extrator type: parselmouth, dio, harvest, crepe (default)",
+        default='rmvpe',
+        help="pitch extrator type: parselmouth, dio, harvest, crepe, rmvpe (default)",
     )
     parser.add_argument(
         "-fmin",
@@ -305,23 +305,40 @@ if __name__ == '__main__':
     ddsp = None
     input_mel = None
     k_step = None
-    if cmd.k_step is not None:
-        k_step = int(cmd.k_step)
+    if args.model.type == 'DiffusionNew':
+        if cmd.k_step is not None:
+            k_step = int(cmd.k_step)
+            if k_step > args.model.k_step_max:
+                k_step = args.model.k_step_max
+        else:
+            k_step = args.model.k_step_max
         print('Shallow diffusion step: ' + str(k_step))
         if cmd.ddsp_ckpt is not None:
             # load ddsp model
             ddsp, ddsp_args = load_model(cmd.ddsp_ckpt, device=device)
             if not check_args(ddsp_args, args):
-                print("Cannot use this DDSP model for shallow diffusion, gaussian diffusion will be used!")
+                print("Cannot use this DDSP model for shallow diffusion, the built-in DDSP model will be used!")
                 ddsp = None
         else:
-            print('DDSP model is not identified!')
-            print('Extracting the mel spectrum of the input audio for shallow diffusion...')
-            audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(device)
-            input_mel = vocoder.extract(audio_t, sample_rate)
-            input_mel = torch.cat((input_mel, input_mel[:,-1:,:]), 1)
+            print("DDSP model is not identified, the built-in DDSP model will be used!")
     else:
-        print('Shallow diffusion step is not identified, gaussian diffusion will be used!')
+        if cmd.k_step is not None:
+            k_step = int(cmd.k_step)
+            print('Shallow diffusion step: ' + str(k_step))
+            if cmd.ddsp_ckpt is not None:
+                # load ddsp model
+                ddsp, ddsp_args = load_model(cmd.ddsp_ckpt, device=device)
+                if not check_args(ddsp_args, args):
+                    print("Cannot use this DDSP model for shallow diffusion, gaussian diffusion will be used!")
+                    ddsp = None
+            else:
+                print('DDSP model is not identified!')
+                print('Extracting the mel spectrum of the input audio for shallow diffusion...')
+                audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(device)
+                input_mel = vocoder.extract(audio_t, sample_rate)
+                input_mel = torch.cat((input_mel, input_mel[:,-1:,:]), 1)
+        else:
+            print('Shallow diffusion step is not identified, gaussian diffusion will be used!')
         
     # forward and save the output
     result = np.zeros(0)
@@ -340,7 +357,7 @@ if __name__ == '__main__':
                 seg_ddsp_f0 = 2 ** (-float(cmd.formant_shift_key) / 12) * seg_f0
                 seg_ddsp_output, _ , (_, _) = ddsp(seg_units, seg_ddsp_f0, seg_volume, spk_id = spk_id, spk_mix_dict = spk_mix_dict)
                 seg_input_mel = vocoder.extract(seg_ddsp_output, args.data.sampling_rate, keyshift=float(cmd.formant_shift_key))
-            elif input_mel != None:
+            elif input_mel is not None:
                 seg_input_mel = input_mel[:, start_frame : start_frame + seg_units.size(1), :]
             else:
                 seg_input_mel = None
@@ -352,6 +369,7 @@ if __name__ == '__main__':
                     spk_id = diff_spk_id, 
                     spk_mix_dict = spk_mix_dict,
                     aug_shift = formant_shift_key,
+                    vocoder=vocoder,
                     gt_spec=seg_input_mel,
                     infer=True, 
                     infer_speedup=infer_speedup, 

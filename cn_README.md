@@ -5,6 +5,23 @@ Language: [English](./README.md) **简体中文**
 </div>
 基于 DDSP（可微分数字信号处理）的实时端到端歌声转换系统
 
+## (4.0 - 测试) 新的 DDSP 级联扩散模型
+数据准备，配置编码器（hubert 或者 contentvec) ，声码器 (nsf-hifigan) 与音高提取器 (RMVPE) 的环节与训练纯 DDSP 模型相同。
+
+(1) 预处理：
+```bash
+python preprocess.py -c configs/diffusion-new.yaml
+```
+(2) 训练级联模型 (只训练一个模型)：
+```bash
+python train_diff.py -c configs/diffusion-new.yaml
+```
+(3) 非实时推理：
+```bash
+python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+```
+'kstep'  需要小于等于配置文件中的 `k_step_max`。
+
 ## 未来计划
 
 本仓库提出的浅扩散的想法得到了 SVC 社区的广泛关注，因此我们构建了一个更优雅的浅扩散项目：[Diffusion-SVC](https://github.com/CNChTu/Diffusion-SVC). 
@@ -20,7 +37,7 @@ Language: [English](./README.md) **简体中文**
 ## （3.0 升级）浅扩散模型 （DDSP + Diff-SVC 重构版）
 ![Diagram](diagram.png)
 
-数据准备，配置编码器（hubert 或者 contentvec ) 与声码器 (nsf-hifigan) 的环节与训练纯 DDSP 模型相同。
+数据准备，配置编码器（hubert 或者 contentvec) ，声码器 (nsf-hifigan) 与音高提取器 (RMVPE) 的环节与训练纯 DDSP 模型相同。
 
 因为扩散模型更难训练，我们提供了一些预训练模型：
 
@@ -84,6 +101,8 @@ DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个�
 
 3.0 更新：由于作者删库 vst 插件取消支持，转为使用独立的实时变声前端；支持多种编码器，并将 contentvec768l12 作为默认编码器；引入浅扩散模型，合成质量极大提升。
 
+4.0 更新：支持最先进的 RMVPE 音高提取器，联合训练 DDSP 与扩散模型，提升推理与训练速度，进一步提升合成质量。
+
 ## 1. 安装依赖
 1. 安装PyTorch：我们推荐从 [**PyTorch 官方网站 **](https://pytorch.org/) 下载 PyTorch.
 
@@ -103,6 +122,10 @@ pip install -r requirements.txt
 - 声码器或增强器：
 
 下载预训练 [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-v1/nsf_hifigan_20221211.zip) 声码器并解压至 `pretrain/` 文件夹。
+
+- 音高提取器:
+
+下载预训练 [RMVPE](https://huggingface.co/datasets/ylzz1997/rmvpe_pretrain_model/resolve/main/rmvpe.pt) 提取器, 将它重命名并放置在 `pretrain/rmvpe/model.pt`
 
 ## 3. 预处理
 

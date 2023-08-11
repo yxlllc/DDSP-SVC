@@ -178,7 +178,7 @@ class Config:
         self.threhold = -35
         self.buffer_num = 2
         self.crossfade_time = 0.03
-        self.select_pitch_extractor = 'harvest'  # F0预测器["parselmouth", "dio", "harvest", "crepe"]
+        self.select_pitch_extractor = 'harvest'  # F0预测器["parselmouth", "dio", "harvest", "crepe", "rmvpe"]
         self.use_spk_mix = False
         self.sounddevices = ['', '']
         self.diff_use = False
@@ -221,7 +221,7 @@ class GUI:
         self.input_wav: np.ndarray = None  # 输入音频规范化后的保存地址
         self.output_wav: np.ndarray = None  # 输出音频规范化后的保存地址
         self.sola_buffer: torch.Tensor = None  # 保存上一个output的crossfade
-        self.f0_mode_list = ["parselmouth", "dio", "harvest", "crepe"]  # F0预测器
+        self.f0_mode_list = ["parselmouth", "dio", "harvest", "crepe" ,"rmvpe"]  # F0预测器
         self.diff_method_list = ["ddim", "pndm", "dpm-solver", "unipc"] # 加速采样方法
         self.f_safe_prefix_pad_length: float = 0.0
         self.resample_kernel = {}
@@ -276,7 +276,7 @@ class GUI:
                      sg.Slider(range=(1, 20), orientation='h', key='buffernum', resolution=1, default_value=4,
                                enable_events=True)],
                     [sg.Text(i18n("f0预测模式")),
-                     sg.Combo(values=self.f0_mode_list, key='f0_mode', default_value=self.f0_mode_list[2],
+                     sg.Combo(values=self.f0_mode_list, key='f0_mode', default_value=self.f0_mode_list[-1],
                               enable_events=True)],
                     [sg.Checkbox(text=i18n('启用增强器'), default=False, key='use_enhancer', enable_events=True),
                      sg.Checkbox(text=i18n('启用相位声码器'), default=False, key='use_phase_vocoder',
@@ -287,8 +287,8 @@ class GUI:
                     [sg.Input(key='diff_project', default_text='exp\\diffusion-demo\\model_400000.pt'),
                      sg.FileBrowse(i18n('选择模型文件'), key='choose_model')],
                     [sg.Text(i18n("扩散说话人id")), sg.Input(key='diff_spk_id', default_text='1', size=18)],
-                    [sg.Text(i18n("扩散深度")), sg.Input(key='k_step', default_text='200', size=18)],
-                    [sg.Text(i18n("扩散加速")), sg.Input(key='diff_acc', default_text='20', size=18)],
+                    [sg.Text(i18n("扩散深度")), sg.Input(key='k_step', default_text='100', size=18)],
+                    [sg.Text(i18n("扩散加速")), sg.Input(key='diff_acc', default_text='10', size=18)],
                     [sg.Text(i18n("扩散算法")),
                      sg.Combo(values=self.diff_method_list, key='diff_method', default_value=self.diff_method_list[0],
                               enable_events=True)],

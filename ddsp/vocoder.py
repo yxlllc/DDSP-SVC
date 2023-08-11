@@ -25,6 +25,7 @@ class F0_Extractor:
         self.hop_size = hop_size
         self.f0_min = f0_min
         self.f0_max = f0_max
+        self.rmvpe = None
         if f0_extractor == 'crepe':
             key_str = str(sample_rate)
             if key_str not in CREPE_RESAMPLE_KERNEL:
@@ -86,7 +87,23 @@ class F0_Extractor:
             f0 = f0.squeeze(0).cpu().numpy()
             f0 = np.array([f0[int(min(int(np.round(n * self.hop_size / self.sample_rate / 0.005)), len(f0) - 1))] for n in range(n_frames - start_frame)])
             f0 = np.pad(f0, (start_frame, 0))
-           
+        
+        # extract f0 using rmvpe
+        elif self.f0_extractor == "rmvpe":
+            if self.rmvpe is None:
+                from encoder.rmvpe import RMVPE
+                self.rmvpe = RMVPE('pretrain/rmvpe/model.pt', hop_length=160)
+            f0 = self.rmvpe.infer_from_audio(audio, self.sample_rate, device=device, thred=0.03, use_viterbi=False)
+            uv = f0 == 0
+            if len(f0[~uv]) > 0:
+                f0[uv] = np.interp(np.where(uv)[0], np.where(~uv)[0], f0[~uv])
+            origin_time = 0.01 * np.arange(len(f0))
+            target_time = self.hop_size / self.sample_rate * np.arange(n_frames - start_frame)
+            f0 = np.interp(target_time, origin_time, f0)
+            uv = np.interp(target_time, origin_time, uv.astype(float)) > 0.5
+            f0[uv] = 0
+            f0 = np.pad(f0, (start_frame, 0))
+            
         else:
             raise ValueError(f" [x] Unknown f0 extractor: {f0_extractor}")
                     
@@ -522,7 +539,7 @@ class Sins(torch.nn.Module):
         phase_frames = phase[:, ::self.block_size, :]
         
         # parameter prediction
-        ctrls = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict)
+        ctrls, hidden = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict)
         
         amplitudes_frames = torch.exp(ctrls['amplitudes'])/ 128
         group_delay = np.pi * torch.tanh(ctrls['group_delay'])
@@ -555,14 +572,15 @@ class Sins(torch.nn.Module):
                         
         signal = harmonic + noise
 
-        return signal, phase, (harmonic, noise) #, (noise_param, noise_param)
+        return signal, hidden, (harmonic, noise) #, (noise_param, noise_param)
 
 class CombSubFast(torch.nn.Module):
     def __init__(self, 
             sampling_rate,
             block_size,
             n_unit=256,
-            n_spk=1):
+            n_spk=1,
+            use_pitch_aug=False):
         super().__init__()
 
         print(' [DDSP Model] Combtooth Subtractive Synthesiser')
@@ -576,9 +594,9 @@ class CombSubFast(torch.nn.Module):
             'harmonic_phase': block_size + 1,
             'noise_magnitude': block_size + 1
         }
-        self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map)
+        self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map, use_pitch_aug=use_pitch_aug)
 
-    def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, initial_phase=None, infer=True, **kwargs):
+    def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, aug_shift=None, initial_phase=None, infer=True, **kwargs):
         '''
             units_frames: B x n_frames x n_unit
             f0_frames: B x n_frames x 1
@@ -599,7 +617,7 @@ class CombSubFast(torch.nn.Module):
         phase_frames = 2 * np.pi * x[:, ::self.block_size, :]
         
         # parameter prediction
-        ctrls = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict)
+        ctrls, hidden = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict, aug_shift=aug_shift)
         
         src_filter = torch.exp(ctrls['harmonic_magnitude'] + 1.j * np.pi * ctrls['harmonic_phase'])
         src_filter = torch.cat((src_filter, src_filter[:,-1:,:]), 1)
@@ -629,7 +647,7 @@ class CombSubFast(torch.nn.Module):
         fold = torch.nn.Fold(output_size=(1, (signal_frames_out.size(1) + 1) * self.block_size), kernel_size=(1, 2 * self.block_size), stride=(1, self.block_size))
         signal = fold(signal_frames_out.transpose(1, 2))[:, 0, 0, self.block_size : -self.block_size]
 
-        return signal, phase_frames, (signal, signal)
+        return signal, hidden, (signal, signal)
 
 class CombSub(torch.nn.Module):
     def __init__(self, 
@@ -675,7 +693,7 @@ class CombSub(torch.nn.Module):
         phase_frames = 2 * np.pi * x[:, ::self.block_size, :]
         
         # parameter prediction
-        ctrls = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict)
+        ctrls, hidden = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict)
         
         group_delay = np.pi * torch.tanh(ctrls['group_delay'])
         src_param = torch.exp(ctrls['harmonic_magnitude'])
@@ -705,4 +723,4 @@ class CombSub(torch.nn.Module):
                         
         signal = harmonic + noise
 
-        return signal, phase_frames, (harmonic, noise)
+        return signal, hidden, (harmonic, noise)

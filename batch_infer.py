@@ -11,7 +11,7 @@ from ast import literal_eval
 from slicer import Slicer
 from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
 from ddsp.core import upsample
-from diffusion.unit2mel import load_model_vocoder
+from diffusion.vocoder import load_model_vocoder
 from tqdm import tqdm
 
 def traverse_dir(
@@ -142,8 +142,8 @@ def parse_args(args=None, namespace=None):
         "--pitch_extractor",
         type=str,
         required=False,
-        default='crepe',
-        help="pitch extrator type: parselmouth, dio, harvest, crepe (default)",
+        default='rmvpe',
+        help="pitch extrator type: parselmouth, dio, harvest, crepe, rmvpe (default)",
     )
     parser.add_argument(
         "-fmin",
@@ -303,17 +303,26 @@ def infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, unit
     
     input_mel = None
     k_step = None
-    if cmd.k_step is not None:
-        k_step = int(cmd.k_step)
+    if args.model.type == 'DiffusionNew':
+        if cmd.k_step is not None:
+            k_step = int(cmd.k_step)
+            if k_step > args.model.k_step_max:
+                k_step = args.model.k_step_max
+        else:
+            k_step = args.model.k_step_max
         print('Shallow diffusion step: ' + str(k_step))
-        if ddsp is None:
-            print('DDSP model is not identified!')
-            print('Extracting the mel spectrum of the input audio for shallow diffusion...')
-            audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(device)
-            input_mel = vocoder.extract(audio_t, sample_rate)
-            input_mel = torch.cat((input_mel, input_mel[:,-1:,:]), 1)
     else:
-        print('Shallow diffusion step is not identified, gaussian diffusion will be used!')
+        if cmd.k_step is not None:
+            k_step = int(cmd.k_step)
+            print('Shallow diffusion step: ' + str(k_step))
+            if ddsp is None:
+                print('DDSP model is not identified!')
+                print('Extracting the mel spectrum of the input audio for shallow diffusion...')
+                audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(device)
+                input_mel = vocoder.extract(audio_t, sample_rate)
+                input_mel = torch.cat((input_mel, input_mel[:,-1:,:]), 1)
+        else:
+            print('Shallow diffusion step is not identified, gaussian diffusion will be used!')
         
     with torch.no_grad():
         if ddsp is not None:
@@ -327,6 +336,7 @@ def infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, unit
                     spk_id = diff_spk_id, 
                     spk_mix_dict = spk_mix_dict,
                     aug_shift = formant_shift_key,
+                    vocoder=vocoder,
                     gt_spec=input_mel[:,:units.size(1)] if input_mel is not None else None,
                     infer=True, 
                     infer_speedup=infer_speedup, 
@@ -352,13 +362,24 @@ if __name__ == '__main__':
     # load diffusion model
     model, vocoder, args = load_model_vocoder(cmd.diff_ckpt, device=device)
     
-    # load ddsp model
     ddsp = None
-    if cmd.k_step is not None and cmd.ddsp_ckpt is not None:
-        ddsp, ddsp_args = load_model(cmd.ddsp_ckpt, device=device)
-        if not check_args(ddsp_args, args):
-            print("Cannot use this DDSP model for shallow diffusion, gaussian diffusion will be used!")
-            ddsp = None
+    if args.model.type == 'DiffusionNew':
+        if cmd.ddsp_ckpt is not None:
+            # load ddsp model
+            ddsp, ddsp_args = load_model(cmd.ddsp_ckpt, device=device)
+            if not check_args(ddsp_args, args):
+                print("Cannot use this DDSP model for shallow diffusion, the built-in DDSP model will be used!")
+                ddsp = None
+        else:
+            print("DDSP model is not identified, the built-in DDSP model will be used!")
+    
+    else:
+        if cmd.k_step is not None and cmd.ddsp_ckpt is not None:
+            # load ddsp model
+            ddsp, ddsp_args = load_model(cmd.ddsp_ckpt, device=device)
+            if not check_args(ddsp_args, args):
+                print("Cannot use this DDSP model for shallow diffusion, gaussian diffusion will be used!")
+                ddsp = None
             
     # load units encoder
     if args.data.encoder == 'cnhubertsoftfish':
