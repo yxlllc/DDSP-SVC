@@ -7,4 +7,5 @@ configs/
 !configs/combsub-old.yaml
 !configs/sins.yaml
 !configs/diffusion.yaml
+!configs/diffusion-new.yaml
 cache/
