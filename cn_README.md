@@ -5,39 +5,40 @@ Language: [English](./README.md) **简体中文**
 </div>
 基于 DDSP（可微分数字信号处理）的实时端到端歌声转换系统
 
-## (4.0 - 测试) 新的 DDSP 级联扩散模型
-数据准备，配置编码器（hubert 或者 contentvec) ，声码器 (nsf-hifigan) 与音高提取器 (RMVPE) 的环节与训练纯 DDSP 模型相同。
+## (4.0 升级) 新的 DDSP 级联扩散模型
+安装依赖，数据准备，配置编码器（hubert 或者 contentvec) ，声码器 (nsf-hifigan) 与音高提取器 (RMVPE) 的环节与训练纯 DDSP 模型相同 （见下面的章节）。
 
-(1) 预处理：
+我们提供了一个预训练模型：
+https://huggingface.co/datasets/ms903/DDSP-SVC-4.0/resolve/main/pre-trained-model/model_0.pt (使用 'contentvec768l12' 编码器)
+
+将名为`model_0.pt`的预训练模型, 放到`diffusion-new.yaml`里面 "expdir: exp/*****" 参数指定的模型导出文件夹内, 没有就新建一个, 程序会自动加载该文件夹下的预训练模型。
+
+（1）预处理：
 ```bash
 python preprocess.py -c configs/diffusion-new.yaml
 ```
-(2) 训练级联模型 (只训练一个模型)：
+
+（2）训练级联模型 (只训练一个模型)：
 ```bash
 python train_diff.py -c configs/diffusion-new.yaml
 ```
-(3) 非实时推理：
+注：fp16 训练暂时有问题，fp32 和 bf16 是可以正常训练的。
+
+（3）非实时推理：
 ```bash
-python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
 ```
-'kstep'  需要小于等于配置文件中的 `k_step_max`。
+4.0版本模型内置了 DDSP 模型，因此不需要使用 -ddsp  指定外部 DDSP 模型， 其他选项与3.0版本模型含义相同，但 kstep 需要小于等于配置文件中的 `k_step_max`，建议保持相等 （默认是 100）。
 
-## 未来计划
-
-本仓库提出的浅扩散的想法得到了 SVC 社区的广泛关注，因此我们构建了一个更优雅的浅扩散项目：[Diffusion-SVC](https://github.com/CNChTu/Diffusion-SVC). 
-
-如果你想尝试最新的浅扩散模型，可以选择迁移至该仓库，它们在实时和非实时 SVC 上都可能有更好的表现. 
-
-另外， [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc) 的 4.1 版本更新也很大程度上参考了我们的代码。现在你也可以在 SO-VITS-SVC 里使用浅扩散模型。
- 
-之所以我们建立了一个新仓库，是因为 DDSP 的部分已经被完全被移除了，是的，浅扩散实际上可以完全和 DDSP 没关系。很不幸的是，作为一种技术理念的 DDSP 在今天几乎已经没有竞争力，它很难产生最先进的结果。
-
-当然，DDSP 本身也不是没有改进的空间，所以本仓库也会持续更新一些有趣的想法，会与 Diffusion-SVC 和 SO-VITS-SVC 的分支逐渐岔开。
+（4）实时 GUI :
+```bash
+# 正在测试中
+```
 
 ## （3.0 升级）浅扩散模型 （DDSP + Diff-SVC 重构版）
 ![Diagram](diagram.png)
 
-数据准备，配置编码器（hubert 或者 contentvec) ，声码器 (nsf-hifigan) 与音高提取器 (RMVPE) 的环节与训练纯 DDSP 模型相同。
+安装依赖，数据准备，配置编码器（hubert 或者 contentvec) ，声码器 (nsf-hifigan) 与音高提取器 (RMVPE) 的环节与训练纯 DDSP 模型相同 （见下面的章节）。
 
 因为扩散模型更难训练，我们提供了一些预训练模型：
 
@@ -87,11 +88,11 @@ DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个�
 
 相比于著名的 [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc), 它训练和合成对电脑硬件的要求要低的多，并且训练时长有数量级的缩短，和 [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 的训练速度接近。
 
-另外在进行实时变声时，本项目的硬件资源消耗显著低于 SO-VITS-SVC 和 RVC，在相同的硬件配置上经过调参可以达到更低的延迟。
+另外在进行实时变声时，本项目的硬件资源消耗显著低于 SO-VITS-SVC ,  但可能略高于RVC 最新版本。
 
-虽然 DDSP 的原始合成质量不是很理想（训练时在 tensorboard 中可以听到原始输出），但在使用基于预训练声码器的增强器（老版本）或使用浅扩散模型（新版本）增强音质后，对于部分数据集可以达到不亚于 SOVITS-SVC 和 RVC 的合成质量。在`samples`文件夹中包含一个合成示例，相关模型检查点可以从仓库发布页面下载。
+虽然 DDSP 的原始合成质量不是很理想（训练时在 tensorboard 中可以听到原始输出），但在使用基于预训练声码器的增强器（老版本）或使用浅扩散模型（新版本）增强音质后，对于部分数据集可以达到不亚于 SOVITS-SVC 和 RVC 的合成质量。
 
-老版本的模型仍然兼容的，以下章节是老版本的使用说明。新版本部分操作是相同的，见上一章节。
+老版本的模型仍然是兼容的，以下章节是老版本的使用说明。新版本部分操作是相同的，见之前章节。
 
 免责声明：请确保仅使用**合法获得的授权数据**训练 DDSP-SVC 模型，不要将这些模型及其合成的任何音频用于非法目的。 本库作者不对因使用这些模型检查点和音频而造成的任何侵权，诈骗等违法行为负责。
 
@@ -191,14 +192,13 @@ data
 ```bash
 python preprocess.py -c configs/combsub.yaml
 ```
-
 2. 训练基于正弦波加法合成器的模型：
 
 ```bash
 python preprocess.py -c configs/sins.yaml
 ```
-
 3. 您可以在预处理之前修改配置文件 `config/<model_name>.yaml`，默认配置适用于GTX-1660 显卡训练 44.1khz 高采样率合成器。
+4. 如果要训练扩散模型，见上述 3.0 或 4.0 章节
 
 ### 3. 备注：
 1. 请保持所有音频切片的采样率与 yaml 配置文件中的采样率一致！如果不一致，程序可以跑，但训练过程中的重新采样将非常缓慢。（可选：使用Adobe Audition™的响度匹配功能可以一次性完成重采样修改声道和响度匹配。）
@@ -207,12 +207,11 @@ python preprocess.py -c configs/sins.yaml
 
 3. 验证集的音频切片总数建议为 10 个左右，不要放太多，不然验证过程会很慢。
 
-4. 如果您的数据集质量不是很高，请在配置文件中将 'f0_extractor' 设为 'crepe'。crepe 算法的抗噪性最好，但代价是会极大增加数据预处理所需的时间。
+4. 如果您的数据集质量不是很高，请在配置文件中将 'f0_extractor' 设为 'rmvpe'. 
 
 5. 配置文件中的 ‘n_spk’ 参数将控制是否训练多说话人模型。如果您要训练**多说话人**模型，为了对说话人进行编号，所有音频文件夹的名称必须是**不大于 ‘n_spk’ 的正整数**。
-## 4. 训练
 
-### 1. 不使用预训练数据进行训练：
+## 4. 训练
 ```bash
 # 以训练 combsub 模型为例 
 python train.py -c configs/combsub.yaml
@@ -222,12 +221,7 @@ python train.py -c configs/combsub.yaml
 2. 可以随时中止训练，然后运行相同的命令来继续训练。
 
 3. 微调 (finetune)：在中止训练后，重新预处理新数据集或更改训练参数（batchsize、lr等），然后运行相同的命令。
-### 2. 使用预训练数据（底模）进行训练：
-1. **使用预训练模型请修改配置文件中的 'n_spk' 参数为 '2' ,同时配置`train`目录结构为多人物目录，不论你是否训练多说话人模型。**
-2. **如果你要训练一个更多说话人的模型，就不要下载预训练模型了。**
-3. 欢迎PR训练的多人底模 (请使用授权同意开源的数据集进行训练)。
-4. 从[**这里**](https://github.com/yxlllc/DDSP-SVC/releases/download/2.0/opencpop+kiritan.zip)下载预训练模型，并将`model_300000.pt`解压到`.\exp\combsub-test\`中
-5. 同不使用预训练数据进行训练一样，启动训练。
+
 ## 5. 可视化
 ```bash
 # 使用tensorboard检查训练状态
@@ -236,6 +230,7 @@ tensorboard --logdir=exp
 第一次验证 (validation) 后，在 TensorBoard 中可以看到合成后的测试音频。
 
 注：TensorBoard 中的测试音频是 DDSP-SVC 模型的原始输出，并未通过增强器增强。 如果想测试模型使用增强器的合成效果（可能具有更高的合成质量），请使用下一章中描述的方法。
+
 ## 6. 非实时变声
 1. （**推荐**）使用预训练声码器增强 DDSP 的输出结果：
 ```bash
@@ -258,6 +253,7 @@ python main.py -h
 # 将1号说话人和2号说话人的音色按照0.5:0.5的比例混合
 python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -e true -eak 0
 ```
+
 ## 7. 实时变声
 用以下命令启动简易操作界面:
 ```bash
@@ -266,6 +262,7 @@ python gui.py
 该前端使用了滑动窗口，交叉淡化，基于SOLA 的拼接和上下文语义参考等技术，在低延迟和资源占用的情况下可以达到接近非实时合成的音质。
 
 更新：现在加入了基于相位声码器的衔接算法，但是大多数情况下 SOLA 算法已经具有足够高的拼接音质，所以它默认是关闭状态。如果您追求极端的低延迟实时变声音质，可以考虑开启它并仔细调参，有概率音质更高。但大量测试发现，如果交叉淡化时长大于0.1秒，相位声码器反而会造成音质明显劣化。
+
 ## 8. 感谢
 * [ddsp](https://github.com/magenta/ddsp)
 * [pc-ddsp](https://github.com/yxlllc/pc-ddsp)

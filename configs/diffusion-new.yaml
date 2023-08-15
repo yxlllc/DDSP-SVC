@@ -43,7 +43,7 @@ train:
   interval_log: 1
   interval_val: 2000
   interval_force_save: 10000
-  lr: 0.0002
+  lr: 0.00015
   decay_step: 50000
   gamma: 0.5
   weight_decay: 0

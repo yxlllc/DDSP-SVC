@@ -5,38 +5,39 @@ Language: **English** [简体中文](./cn_README.md) [한국어（outdated）](.
 </div>
 Real-time end-to-end singing voice conversion system based on DDSP (Differentiable Digital Signal Processing）.
 
-## (4.0 - test) New DDSP cascade diffusion model
-Data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) is the same as training a pure DDSP model.
+## (4.0 - Update) New DDSP cascade diffusion model
+Installing dependencies, data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) are the same as training a pure DDSP model (See chapter 1 ~ 3 below).
+
+We provide a pre-trained model here:
+https://huggingface.co/datasets/ms903/DDSP-SVC-4.0/resolve/main/pre-trained-model/model_0.pt (using 'contentvec768l12' encoder)
+
+Move the `model_0.pt` to the model export folder specified by the 'expdir' parameter in `diffusion-new.yaml`, and the program will automatically load the pre-trained model in that folder.
 
 (1) Preprocessing：
 ```bash
 python preprocess.py -c configs/diffusion-new.yaml
 ```
+
 (2) Train a cascade model (only train one model)：
 ```bash
 python train_diff.py -c configs/diffusion-new.yaml
 ```
+Note: There is a temporary problem with fp16 training, but fp32 and bf16 are working normally,
+
 (3) Non-real-time inference：
 ```bash
-python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
 ```
-'kstep'  needs to be less than or equal to `k_step_max` in the configuration file.
+The 4.0 version model has a built-in DDSP model, so specifying an external DDSP model using `-ddsp` is unnecessary. The other options have the same meaning as the 3.0 version model, but 'kstep'  needs to be less than or equal to `k_step_max` in the configuration file, it is recommended to keep it equal (the default is 100)
 
-## Future plan
-The idea of shallow diffusion proposed by this repository has received widespread attention from the SVC community, so we built a more elegant shallow diffusion project:  [Diffusion-SVC](https://github.com/CNChTu/Diffusion-SVC).
-
-If you want to try the latest shallow diffusion models, you can choose to migrate to this repository, which may perform better on both real-time and non-real-time SVC.
-
-Also, the version 4.1 update of  [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc) has heavily referenced our code. Now you can also use the shallow diffusion model in SO-VITS-SVC.
-
-The reason we created a new repository is that the DDSP section has been completely removed, and yes, shallow diffusion can actually be completely unrelated to DDSP. Unfortunately, DDSP as a technical idea is hardly competitive today, and it hardly produces state-of-the-art results.
-
-Of course, DDSP itself is not without room for improvement, so this repository will continue to update some interesting ideas, which will gradually diverge from the branch of Diffusion-SVC in SO-VITS-SVC.
-
+(4) Real-time GUI：
+```bash
+# It's under testing.
+```
 ## (3.0 - Update) Shallow diffusion model (DDSP + Diff-SVC refactor version)
 ![Diagram](diagram.png)
 
-Data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) is the same as training a pure DDSP model.
+Installing dependencies, data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) are the same as training a pure DDSP model (See chapter 1 ~ 3 below).
 
 Because the diffusion model is more difficult to train, we provide some pre-trained models here:
 
@@ -87,11 +88,11 @@ DDSP-SVC is a new open source singing voice conversion project dedicated to the 
 
 Compared with the famous [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc),  its training and synthesis have much lower requirements for computer hardware, and the training time can be shortened by orders of magnitude, which is close to the training speed of [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI).
 
-In addition, when performing real-time voice changing, the hardware resource consumption of this project is significantly lower than that of SO-VITS-SVC and RVC, and a lower delay can be achieved by tuning parameters on the same hardware configuration.
+In addition, when performing real-time voice changing, the hardware resource consumption of this project is significantly lower than that of SO-VITS-SVC，but probably slightly higher than the latest version of RVC.
 
-Although the original synthesis quality of DDSP is not ideal (the original output can be heard in tensorboard while training), after enhancing the sound quality with a pre-trained vocoder based enhancer (old version) or with a shallow diffusion model (new version) , for some data sets, it can achieve the synthesis quality no less than SOVITS-SVC and RVC. The demo outputs are in the `samples` folder,  and the related model checkpoint can be downloaded from the release page.
+Although the original synthesis quality of DDSP is not ideal (the original output can be heard in tensorboard while training), after enhancing the sound quality with a pre-trained vocoder based enhancer (old version) or with a shallow diffusion model (new version) , for some datasets, it can achieve the synthesis quality no less than SOVITS-SVC and RVC. 
 
-The old version models are still compatible, the following chapters are the instructions for the old version. Some operations of the new version are the same, see the previous chapter.
+The old version models are still compatible, the following chapters are the instructions for the old version. Some operations of the new version are the same, see the previous chapters.
 
 Disclaimer: Please make sure to only train DDSP-SVC models with **legally obtained authorized data**, and do not use these models and any audio they synthesize for illegal purposes. The author of this repository is not responsible for any infringement, fraud and other illegal acts caused by the use of these model checkpoints and audio.
 
@@ -105,6 +106,7 @@ pip install -r requirements.txt
 NOTE : I only test the code using python 3.8 (windows) + torch 1.9.1 + torchaudio 0.6.0, too new or too old dependencies may not work
 
 UPDATE: python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 works, and training is faster.
+
 ## 2. Configuring the pretrained model
 - Feature Encoder (choose only one):
 
@@ -141,6 +143,8 @@ python preprocess.py -c configs/sins.yaml
 ```
 for a model of sinusoids additive synthesiser.
 
+For training the diffusion model, see section 3.0 or 4.0 above.
+
 You can modify the configuration file `config/<model_name>.yaml` before preprocessing. The default configuration is suitable for training 44.1khz high sampling rate synthesiser with GTX-1660 graphics card.
 
 NOTE 1: Please keep the sampling rate of all audio clips consistent with the sampling rate in the yaml configuration file ! If it is not consistent, the program can be executed safely, but the resampling during the training process will be very slow.
@@ -149,9 +153,9 @@ NOTE 2: The total number of the audio clips for training dataset is recommended 
 
 NOTE 3: The total number of the audio clips for validation dataset is recommended to be about 10, please don't put too many or it will be very slow to do the validation.
 
-NOTE 4:  If your dataset is not very high quality, set 'f0_extractor' to 'crepe' in the config file.  The crepe algorithm has the best noise immunity, but at the cost of greatly increasing the time required for data preprocessing.
+NOTE 4:  If your dataset is not very high quality, set 'f0_extractor' to 'rmvpe' in the config file.  
 
-UPDATE: Multi-speaker training is supported now. The 'n_spk' parameter in configuration file controls whether it is a multi-speaker model.  If you want to train a **multi-speaker** model, audio folders need to be named with **positive integers not greater than 'n_spk'** to represent speaker ids, the directory structure is like below:
+NOTE 5: Multi-speaker training is supported now. The 'n_spk' parameter in configuration file controls whether it is a multi-speaker model.  If you want to train a **multi-speaker** model, audio folders need to be named with **positive integers not greater than 'n_spk'** to represent speaker ids, the directory structure is like below:
 ```bash
 # training dataset
 # the 1st speaker
@@ -203,6 +207,7 @@ tensorboard --logdir=exp
 Test audio samples will be visible in TensorBoard after the first validation.
 
 NOTE: The test audio samples in Tensorboard are the original outputs of your DDSP-SVC model that is not enhanced by an enhancer. If you want to test the synthetic effect after using the enhancer  (which may have higher quality) , please use the method described in the following chapter.
+
 ## 6. Non-real-time VC
 (**Recommend**) Enhance the output using the pretrained vocoder-based enhancer:
 ```bash
@@ -232,6 +237,7 @@ python gui.py
 The front-end uses technologies such as sliding window, cross-fading, SOLA-based splicing and contextual semantic reference, which can achieve sound quality close to non-real-time synthesis with low latency and resource occupation.
 
 Update: A splicing algorithm based on a phase vocoder is now added, but in most cases the SOLA algorithm already has high enough splicing sound quality, so it is turned off by default. If you are pursuing extreme low-latency real-time sound quality, you can consider turning it on and tuning the parameters carefully, and there is a possibility that the sound quality will be higher. However, a large number of tests have found that if the cross-fade time is longer than 0.1 seconds, the phase vocoder will cause a significant degradation in sound quality.
+
 ## 8. Acknowledgement
 * [ddsp](https://github.com/magenta/ddsp)
 * [pc-ddsp](https://github.com/yxlllc/pc-ddsp)
