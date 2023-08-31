@@ -18,7 +18,7 @@ class DiffGtMel:
     def flush_model(self, project_path, ddsp_config=None):
         if (self.model is None) or (project_path != self.project_path):
             model, vocoder, args = load_model_vocoder(project_path, device=self.device)
-            if self.check_args(ddsp_config, args):
+            if ddsp_config is None or self.check_args(ddsp_config, args):
                 self.model = model
                 self.vocoder = vocoder
                 self.args = args
@@ -34,13 +34,17 @@ class DiffGtMel:
 
     def __call__(self, audio, f0, hubert, volume, acc=1, spk_id=1, k_step=0, method='pndm',
                  spk_mix_dict=None, start_frame=0):
-        input_mel = self.vocoder.extract(audio, self.args.data.sampling_rate)
+        if audio is None:
+            input_mel = None
+        else:
+            input_mel = self.vocoder.extract(audio, self.args.data.sampling_rate)
         out_mel = self.model(
             hubert,
             f0,
             volume,
             spk_id=spk_id,
             spk_mix_dict=spk_mix_dict,
+            vocoder=self.vocoder,
             gt_spec=input_mel,
             infer=True,
             infer_speedup=acc,
@@ -59,7 +63,8 @@ class DiffGtMel:
               use_silence=False, spk_mix_dict=None):
         start_frame = int(silence_front * self.vocoder.vocoder_sample_rate / self.vocoder.vocoder_hop_size)
         if use_silence:
-            audio = audio[:, start_frame * self.vocoder.vocoder_hop_size:]
+            if audio is not None:
+                audio = audio[:, start_frame * self.vocoder.vocoder_hop_size:]
             f0 = f0[:, start_frame:, :]
             hubert = hubert[:, start_frame:, :]
             volume = volume[:, start_frame:, :]

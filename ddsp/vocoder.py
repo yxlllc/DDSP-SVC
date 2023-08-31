@@ -17,6 +17,7 @@ from .core import frequency_filter, upsample, remove_above_fmax, MaskedAvgPool1d
 import time
 
 CREPE_RESAMPLE_KERNEL = {}
+F0_KERNEL = {}
 
 class F0_Extractor:
     def __init__(self, f0_extractor, sample_rate = 44100, hop_size = 512, f0_min = 65, f0_max = 800):
@@ -25,12 +26,16 @@ class F0_Extractor:
         self.hop_size = hop_size
         self.f0_min = f0_min
         self.f0_max = f0_max
-        self.rmvpe = None
         if f0_extractor == 'crepe':
             key_str = str(sample_rate)
             if key_str not in CREPE_RESAMPLE_KERNEL:
                 CREPE_RESAMPLE_KERNEL[key_str] = Resample(sample_rate, 16000, lowpass_filter_width = 128)
             self.resample_kernel = CREPE_RESAMPLE_KERNEL[key_str]
+        if f0_extractor == 'rmvpe':
+            if 'rmvpe' not in F0_KERNEL :
+                from encoder.rmvpe import RMVPE
+                F0_KERNEL['rmvpe'] = RMVPE('pretrain/rmvpe/model.pt', hop_length=160)
+            self.rmvpe = F0_KERNEL['rmvpe']
                 
     def extract(self, audio, uv_interp = False, device = None, silence_front = 0): # audio: 1d numpy array
         # extractor start time
@@ -90,9 +95,6 @@ class F0_Extractor:
         
         # extract f0 using rmvpe
         elif self.f0_extractor == "rmvpe":
-            if self.rmvpe is None:
-                from encoder.rmvpe import RMVPE
-                self.rmvpe = RMVPE('pretrain/rmvpe/model.pt', hop_length=160)
             f0 = self.rmvpe.infer_from_audio(audio, self.sample_rate, device=device, thred=0.03, use_viterbi=False)
             uv = f0 == 0
             if len(f0[~uv]) > 0:

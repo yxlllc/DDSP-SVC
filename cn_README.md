@@ -32,7 +32,7 @@ python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keyc
 
 （4）实时 GUI :
 ```bash
-# 正在测试中
+python gui_diff.py
 ```
 
 ## （3.0 升级）浅扩散模型 （DDSP + Diff-SVC 重构版）
