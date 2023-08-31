@@ -6,7 +6,7 @@ Language: **English** [简体中文](./cn_README.md) [한국어（outdated）](.
 Real-time end-to-end singing voice conversion system based on DDSP (Differentiable Digital Signal Processing）.
 
 ## (4.0 - Update) New DDSP cascade diffusion model
-Installing dependencies, data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) are the same as training a pure DDSP model (See chapter 1 ~ 3 below).
+Installing dependencies, data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) are the same as training a pure DDSP model (See section below).
 
 We provide a pre-trained model here:
 https://huggingface.co/datasets/ms903/DDSP-SVC-4.0/resolve/main/pre-trained-model/model_0.pt (using 'contentvec768l12' encoder)
