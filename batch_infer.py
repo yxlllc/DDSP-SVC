@@ -416,7 +416,7 @@ if __name__ == '__main__':
         is_sort=True,
         is_ext=True
     )
-    for rel_path in tqdm(wav_paths):
+    for rel_path in wav_paths:
         input_path = pathlib.Path(cmd.input) / rel_path
         output_path = (pathlib.Path(cmd.output) / rel_path).with_suffix('.wav')
         print('_______________________________')
