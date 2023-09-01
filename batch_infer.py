@@ -361,7 +361,7 @@ def infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, unit
         output = vocoder.infer(mel, f0)
         output *= mask
         output = output.squeeze().cpu().numpy()
-        sf.write(output_path, output[:audio.shape[0]], args.data.sampling_rate)
+        sf.write(output_path, output, args.data.sampling_rate)
 
 
 if __name__ == '__main__':
@@ -416,7 +416,7 @@ if __name__ == '__main__':
         is_sort=True,
         is_ext=True
     )
-    for rel_path in wav_paths:
+    for rel_path in tqdm(wav_paths):
         input_path = pathlib.Path(cmd.input) / rel_path
         output_path = (pathlib.Path(cmd.output) / rel_path).with_suffix('.wav')
         print('_______________________________')
