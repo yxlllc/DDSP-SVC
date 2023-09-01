@@ -19,13 +19,25 @@ from tqdm import tqdm
 
 def traverse_dir(
         root_dir,
-        extensions,
+        extensions: list,
         amount=None,
         str_include=None,
         str_exclude=None,
-        is_pure=False,
+        is_rel=False,
         is_sort=False,
-        is_ext=True):
+        is_ext=True
+):
+    """
+    Iterate the files matching the given condition in the given directory and its subdirectories.
+    :param root_dir: the root directory
+    :param extensions: a list of required file extensions (without ".")
+    :param amount: limit the number of files
+    :param str_include: require the relative path to include this string
+    :param str_exclude: require the relative path not to include this string
+    :param is_rel: whether to return the relative path instead of full path
+    :param is_sort: whether to sort the final results
+    :param is_ext: whether to reserve extensions in the filenames
+    """
     root_dir = pathlib.Path(root_dir)
     file_list = []
     cnt = 0
@@ -34,7 +46,7 @@ def traverse_dir(
             continue
         # path
         pure_path = file.relative_to(root_dir)
-        mix_path = pure_path if is_pure else file
+        mix_path = pure_path if is_rel else file
         # check string
         if (str_include is not None) and (str_include not in pure_path.as_posix()):
             continue
@@ -400,7 +412,7 @@ if __name__ == '__main__':
     wav_paths = traverse_dir(
         cmd.input,
         extensions=extensions,
-        is_pure=True,
+        is_rel=True,
         is_sort=True,
         is_ext=True
     )
