@@ -27,7 +27,8 @@ class Unit2Control(nn.Module):
             input_channel,
             n_spk,
             output_splits,
-            use_pitch_aug=False):
+            use_pitch_aug=False,
+            pcmer_norm=False):
         super().__init__()
         self.output_splits = output_splits
         self.f0_embed = nn.Linear(1, 256)
@@ -56,7 +57,8 @@ class Unit2Control(nn.Module):
             dim_keys=256,
             dim_values=256,
             residual_dropout=0.1,
-            attention_dropout=0.1)
+            attention_dropout=0.1,
+            pcmer_norm=pcmer_norm)
         self.norm = nn.LayerNorm(256)
 
         # out
