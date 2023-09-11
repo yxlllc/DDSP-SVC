@@ -3,6 +3,7 @@ import yaml
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 from nsf_hifigan.nvSTFT import STFT
 from nsf_hifigan.models import load_model,load_config
 from torchaudio.transforms import Resample
@@ -50,7 +51,8 @@ def load_model_vocoder(
                 args.model.use_pitch_aug,
                 vocoder.dimension,
                 args.model.n_layers,
-                args.model.n_chans) 
+                args.model.n_chans,
+                pcmer_norm=args.model.pcmer_norm)
     else:
         raise ValueError(f" [x] Unknown Model: {args.model.type}")
         
@@ -212,9 +214,10 @@ class Unit2Wav(nn.Module):
             use_pitch_aug=False,
             out_dims=128,
             n_layers=20, 
-            n_chans=384):
+            n_chans=384,
+            pcmer_norm=False):
         super().__init__()
-        self.ddsp_model = CombSubFast(sampling_rate, block_size, n_unit, n_spk, use_pitch_aug)
+        self.ddsp_model = CombSubFast(sampling_rate, block_size, n_unit, n_spk, use_pitch_aug, pcmer_norm=pcmer_norm)
         self.diff_model = GaussianDiffusion(WaveNet(out_dims, n_layers, n_chans, 256), out_dims=out_dims)
 
     def forward(self, units, f0, volume, spk_id=None, spk_mix_dict=None, aug_shift=None, vocoder=None,
