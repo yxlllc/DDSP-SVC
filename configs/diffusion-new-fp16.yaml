@@ -22,7 +22,7 @@ model:
   k_step_max: 100
   use_pitch_aug: true 
   n_spk: 1 # max number of different speakers
-  pcmer_norm: true
+  pcmer_norm: true # if use fp16, here must be true
 device: cuda # training device
 vocoder:
   type: 'nsf-hifigan'
