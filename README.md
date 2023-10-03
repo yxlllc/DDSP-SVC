@@ -6,8 +6,7 @@ Language: **English** [简体中文](./cn_README.md) [한국어（outdated）](.
 
 Installing dependencies, data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) are the same as training a pure DDSP model (See section below).
 
-We provide a pre-trained model here:
-<https://huggingface.co/datasets/ms903/DDSP-SVC-4.0/resolve/main/pre-trained-model/model_0.pt> (using 'contentvec768l12' encoder)
+We provide a pre-trained model here: <https://huggingface.co/datasets/ms903/DDSP-SVC-4.0/resolve/main/pre-trained-model/model_0.pt> (using 'contentvec768l12' encoder)
 
 Move the `model_0.pt` to the model export folder specified by the 'expdir' parameter in `diffusion-new.yaml`, and the program will automatically load the pre-trained model in that folder.
 
@@ -141,15 +140,11 @@ Download the pre-trained [NSF-HiFiGAN](https://github.com/openvpi/vocoders/relea
 
 - Pitch extractor:
 
-Download the pre-trained [RMVPE](https://huggingface.co/datasets/ylzz1997/rmvpe_pretrain_model/resolve/main/rmvpe.pt) extractor, rename it and place it in `pretrain/rmvpe/model.pt`
+Download the pre-trained [RMVPE](https://github.com/yxlllc/RMVPE/releases/download/230917/rmvpe.zip) extractor, rename it and place it in `pretrain/rmvpe/model.pt`
 
 ## 3. Preprocessing
 
-Put all the training dataset (.wav format audio clips) in the below directory:
-`data/train/audio`.
-Put all the validation dataset (.wav format audio clips) in the below directory:
-`data/val/audio`.
-You can also run
+Put all the training dataset (.wav format audio clips) in the below directory: `data/train/audio`. Put all the validation dataset (.wav format audio clips) in the below directory: `data/val/audio`. You can also run
 
 ```bash
 python draw.py

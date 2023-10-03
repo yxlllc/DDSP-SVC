@@ -47,13 +47,18 @@ class F0_Extractor:
         
         # extract f0 using parselmouth
         if self.f0_extractor == 'parselmouth':
-            f0 = parselmouth.Sound(audio, self.sample_rate).to_pitch_ac(
+            l_pad = int(np.ceil(1.5 / self.f0_min * self.sample_rate))
+            r_pad = int(self.hop_size * ((len(audio) - 1) // self.hop_size + 1) - len(audio) + l_pad + 1)
+            s = parselmouth.Sound(np.pad(audio, (l_pad, r_pad)), self.sample_rate).to_pitch_ac(
                 time_step = self.hop_size / self.sample_rate, 
                 voicing_threshold = 0.6,
                 pitch_floor = self.f0_min, 
-                pitch_ceiling = self.f0_max).selected_array['frequency']
-            pad_size = start_frame + (int(len(audio) // self.hop_size) - len(f0) + 1) // 2
-            f0 = np.pad(f0,(pad_size, n_frames - len(f0) - pad_size))
+                pitch_ceiling = self.f0_max)
+            assert np.abs(s.t1 - 1.5 / self.f0_min) < 0.001
+            f0 = np.pad(s.selected_array['frequency'], (start_frame, 0))
+            if len(f0) < n_frames:
+                f0 = np.pad(f0, (0, n_frames - len(f0)))
+            f0 = f0[: n_frames]
             
         # extract f0 using dio
         elif self.f0_extractor == 'dio':
@@ -582,8 +587,7 @@ class CombSubFast(torch.nn.Module):
             block_size,
             n_unit=256,
             n_spk=1,
-            use_pitch_aug=False,
-            pcmer_norm=False):
+            use_pitch_aug=False):
         super().__init__()
 
         print(' [DDSP Model] Combtooth Subtractive Synthesiser')
@@ -597,7 +601,7 @@ class CombSubFast(torch.nn.Module):
             'harmonic_phase': block_size + 1,
             'noise_magnitude': block_size + 1
         }
-        self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map, use_pitch_aug=use_pitch_aug, pcmer_norm=pcmer_norm)
+        self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map, use_pitch_aug=use_pitch_aug)
 
     def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, aug_shift=None, initial_phase=None, infer=True, **kwargs):
         '''
