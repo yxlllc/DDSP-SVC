@@ -149,7 +149,7 @@ pip install -r requirements.txt
 
 - 音高提取器:
 
-下载预训练 [RMVPE](https://github.com/yxlllc/RMVPE/releases/download/230917/rmvpe.zip) 提取器, 将它重命名并放置在 `pretrain/rmvpe/model.pt`
+下载预训练 [RMVPE](https://github.com/yxlllc/RMVPE/releases/download/230917/rmvpe.zip) 提取器并解压至 `pretrain/` 文件夹
 
 ## 3. 预处理
 

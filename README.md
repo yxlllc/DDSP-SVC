@@ -140,7 +140,7 @@ Download the pre-trained [NSF-HiFiGAN](https://github.com/openvpi/vocoders/relea
 
 - Pitch extractor:
 
-Download the pre-trained [RMVPE](https://github.com/yxlllc/RMVPE/releases/download/230917/rmvpe.zip) extractor, rename it and place it in `pretrain/rmvpe/model.pt`
+Download the pre-trained [RMVPE](https://github.com/yxlllc/RMVPE/releases/download/230917/rmvpe.zip) extractor and unzip it into `pretrain/` folder.
 
 ## 3. Preprocessing
 

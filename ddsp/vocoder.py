@@ -587,7 +587,8 @@ class CombSubFast(torch.nn.Module):
             block_size,
             n_unit=256,
             n_spk=1,
-            use_pitch_aug=False):
+            use_pitch_aug=False,
+            pcmer_norm=False):
         super().__init__()
 
         print(' [DDSP Model] Combtooth Subtractive Synthesiser')
@@ -601,7 +602,7 @@ class CombSubFast(torch.nn.Module):
             'harmonic_phase': block_size + 1,
             'noise_magnitude': block_size + 1
         }
-        self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map, use_pitch_aug=use_pitch_aug)
+        self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map, use_pitch_aug=use_pitch_aug, pcmer_norm=pcmer_norm)
 
     def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, aug_shift=None, initial_phase=None, infer=True, **kwargs):
         '''
