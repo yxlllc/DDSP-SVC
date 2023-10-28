@@ -229,10 +229,10 @@ class GUI:
             ],
             [sg.Frame(layout=[
                 [sg.Text(i18n("输入设备")),
-                 sg.Combo(input_devices, key='sg_input_device', default_value=input_devices[sd.default.device[0]],
+                 sg.Combo(input_devices, key='sg_input_device', default_value=input_devices[0],
                           enable_events=True)],
                 [sg.Text(i18n("输出设备")),
-                 sg.Combo(output_devices, key='sg_output_device', default_value=output_devices[sd.default.device[1]],
+                 sg.Combo(output_devices, key='sg_output_device', default_value=output_devices[0],
                           enable_events=True)]
             ], title=i18n('音频设备'))
             ],
