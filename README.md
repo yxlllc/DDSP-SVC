@@ -138,6 +138,8 @@ UPDATE: python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 works,
 
 Download the pre-trained [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-v1/nsf_hifigan_20221211.zip) vocoder and unzip it into `pretrain/` folder.
 
+Or use the https://github.com/openvpi/SingingVocoders project to fine-tune the vocoder for higher sound quality.
+
 - Pitch extractor:
 
 Download the pre-trained [RMVPE](https://github.com/yxlllc/RMVPE/releases/download/230917/rmvpe.zip) extractor and unzip it into `pretrain/` folder.

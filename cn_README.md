@@ -147,6 +147,8 @@ pip install -r requirements.txt
 
 下载预训练 [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-v1/nsf_hifigan_20221211.zip) 声码器并解压至 `pretrain/` 文件夹。
 
+或者使用 https://github.com/openvpi/SingingVocoders 微调声码器以获得更高音质。
+
 - 音高提取器:
 
 下载预训练 [RMVPE](https://github.com/yxlllc/RMVPE/releases/download/230917/rmvpe.zip) 提取器并解压至 `pretrain/` 文件夹
