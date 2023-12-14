@@ -17,6 +17,7 @@ scipy
 SoundFile
 tensorboard
 torchcrepe
+torchfcpe
 tqdm
 transformers
 wave
