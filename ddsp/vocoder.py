@@ -110,6 +110,31 @@ class F0_Extractor:
             uv = np.interp(target_time, origin_time, uv.astype(float)) > 0.5
             f0[uv] = 0
             f0 = np.pad(f0, (start_frame, 0))
+
+        elif self.f0_extractor == "fcpe":
+            if device is None:
+                device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            _JUMP_SAFE_PAD = False
+            if self.transformer_f0 is None:
+                # from encoder.fcpe.model import FCPEInfer
+                # self.transformer_f0 = FCPEInfer(model_path='pretrain/fcpe/fcpe.pt')
+                from torchfcpe import spawn_bundled_infer_model
+                self.transformer_f0 = spawn_bundled_infer_model(device=device)
+            if _JUMP_SAFE_PAD:
+                raw_audio = audio
+            #f0 = self.transformer_f0(audio=raw_audio, sr=self.sample_rate)
+            _raw_audio = torch.from_numpy(raw_audio).float().unsqueeze(0).unsqueeze(-1).to(device)
+            f0 = self.transformer_f0(_raw_audio, self.sample_rate, threshold=0.005)
+            f0 = f0.transpose(1, 2)
+            if not _JUMP_SAFE_PAD:
+                f0 = torch.nn.functional.interpolate(f0, size=int(n_frames), mode='nearest')
+            f0 = f0.transpose(1, 2)
+            f0 = f0.squeeze().cpu().numpy()
+            if _JUMP_SAFE_PAD:
+                f0 = np.array(
+                    [f0[int(min(int(np.round(n * self.hop_size / self.sample_rate / 0.01)), len(f0) - 1))] for n in
+                     range(n_frames - start_frame)])
+                f0 = np.pad(f0.astype('float'), (start_frame, n_frames - len(f0) - start_frame))
             
         else:
             raise ValueError(f" [x] Unknown f0 extractor: {f0_extractor}")

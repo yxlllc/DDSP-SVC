@@ -164,7 +164,7 @@ class Config:
         self.threhold = -35
         self.buffer_num = 2
         self.crossfade_time = 0.03
-        self.select_pitch_extractor = 'harvest'  # F0预测器["parselmouth", "dio", "harvest", "crepe", "rmvpe"]
+        self.select_pitch_extractor = 'harvest'  # F0预测器["parselmouth", "dio", "harvest", "crepe", "rmvpe", "fcpe"]
         self.use_spk_mix = False
         self.sounddevices = ['', '']
         self.diff_project = ''
@@ -204,7 +204,7 @@ class GUI:
         self.input_wav: np.ndarray = None  # 输入音频规范化后的保存地址
         self.output_wav: np.ndarray = None  # 输出音频规范化后的保存地址
         self.sola_buffer: torch.Tensor = None  # 保存上一个output的crossfade
-        self.f0_mode_list = ["parselmouth", "dio", "harvest", "crepe" ,"rmvpe"]  # F0预测器
+        self.f0_mode_list = ["parselmouth", "dio", "harvest", "crepe" ,"rmvpe", "fcpe"]  # F0预测器
         self.diff_method_list = ["ddim", "pndm", "dpm-solver", "unipc"] # 加速采样方法
         self.f_safe_prefix_pad_length: float = 0.0
         self.resample_kernel = {}
