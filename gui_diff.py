@@ -12,10 +12,12 @@ import time
 from gui_diff_locale import I18nAuto
 from diffusion.infer_gt_mel import DiffGtMel
 
+flag_vc = False
 
 def phase_vocoder(a, b, fade_out, fade_in):
-    fa = torch.fft.rfft(a)
-    fb = torch.fft.rfft(b)
+    window = torch.sqrt(fade_out * fade_in)
+    fa = torch.fft.rfft(a * window)
+    fb = torch.fft.rfft(b * window)
     absab = torch.abs(fa) + torch.abs(fb)
     n = a.shape[0]
     if n % 2 == 0:
@@ -28,8 +30,7 @@ def phase_vocoder(a, b, fade_out, fade_in):
     deltaphase = deltaphase - 2 * np.pi * torch.floor(deltaphase / 2 / np.pi + 0.5)
     w = 2 * np.pi * torch.arange(n // 2 + 1).to(a) + deltaphase
     t = torch.arange(n).unsqueeze(-1).to(a) / n
-    result = a * (fade_out ** 2) + b * (fade_in ** 2) + torch.sum(absab * torch.cos(w * t + phia),
-                                                                  -1) * fade_out * fade_in / n
+    result = a * (fade_out ** 2) + b * (fade_in ** 2) + torch.sum(absab * torch.cos(w * t + phia), -1) * window / n
     return result
 
 
@@ -155,22 +156,22 @@ class SvcDDSP:
 class Config:
     def __init__(self) -> None:
         self.samplerate = 44100  # Hz
-        self.block_time = 1.5  # s
+        self.block_time = 0.5  # s
         self.f_pitch_change: float = 0.0  # float(request_form.get("fPitchChange", 0))
         self.spk_id = 1  # 默认说话人。
         self.spk_mix_dict = None  # {1:0.5, 2:0.5} 表示1号说话人和2号说话人的音色按照0.5:0.5的比例混合
-        self.use_phase_vocoder = True
+        self.use_phase_vocoder = False
         self.checkpoint_path = ''
-        self.threhold = -35
-        self.buffer_num = 2
-        self.crossfade_time = 0.03
+        self.threhold = -45
+        self.crossfade_time = 0.04
+        self.extra_time = 2
         self.select_pitch_extractor = 'harvest'  # F0预测器["parselmouth", "dio", "harvest", "crepe", "rmvpe", "fcpe"]
         self.use_spk_mix = False
         self.sounddevices = ['', '']
         self.diff_project = ''
         self.diff_acc = 10
         self.k_step = 100
-        self.diff_method = 'pndm'
+        self.diff_method = 'ddim'
         self.diff_silence = False
 
     def save(self, path):
@@ -208,11 +209,18 @@ class GUI:
         self.diff_method_list = ["ddim", "pndm", "dpm-solver", "unipc"] # 加速采样方法
         self.f_safe_prefix_pad_length: float = 0.0
         self.resample_kernel = {}
+        self.stream = None
+        self.input_devices = None
+        self.output_devices = None
+        self.input_devices_indices = None 
+        self.output_devices_indices = None
+        self.update_devices()
+        self.default_input_device = self.input_devices[self.input_devices_indices.index(sd.default.device[0])]
+        self.default_output_device = self.output_devices[self.output_devices_indices.index(sd.default.device[1])]
         self.launcher()  # start
 
     def launcher(self):
         '''窗口加载'''
-        input_devices, output_devices, _, _ = self.get_devices()
         sg.theme('DarkBlue12')  # 设置主题
         # 界面布局
         layout = [
@@ -229,10 +237,10 @@ class GUI:
             ],
             [sg.Frame(layout=[
                 [sg.Text(i18n("输入设备")),
-                 sg.Combo(input_devices, key='sg_input_device', default_value=input_devices[0],
+                 sg.Combo(self.input_devices, key='sg_input_device', default_value=self.default_input_device,
                           enable_events=True)],
                 [sg.Text(i18n("输出设备")),
-                 sg.Combo(output_devices, key='sg_output_device', default_value=output_devices[0],
+                 sg.Combo(self.output_devices, key='sg_output_device', default_value=self.default_output_device,
                           enable_events=True)]
             ], title=i18n('音频设备'))
             ],
@@ -255,8 +263,8 @@ class GUI:
                     [sg.Text(i18n("交叉淡化时长")),
                      sg.Slider(range=(0.01, 0.15), orientation='h', key='crossfade', resolution=0.01,
                                default_value=0.04, enable_events=True)],
-                    [sg.Text(i18n("使用历史区块数量")),
-                     sg.Slider(range=(1, 20), orientation='h', key='buffernum', resolution=1, default_value=4,
+                    [sg.Text(i18n("额外推理时长")),
+                     sg.Slider(range=(0.05, 5), orientation='h', key='extra', resolution=0.01, default_value=2.0,
                                enable_events=True)],
                     [sg.Text(i18n("f0预测模式")),
                      sg.Combo(values=self.f0_mode_list, key='f0_mode', default_value=self.f0_mode_list[-1],
@@ -292,19 +300,17 @@ class GUI:
         '''事件处理'''
         while True:  # 事件处理循环
             event, values = self.window.read()
+            print('event: ' + event)
             if event == sg.WINDOW_CLOSED:  # 如果用户关闭窗口
                 self.flag_vc = False
                 exit()
-            
-            print('event: ' + event)
-            
-            if event == 'start_vc' and self.flag_vc == False:
+            elif event == 'start_vc' and not flag_vc:
                 # set values 和界面布局layout顺序一一对应
                 self.set_values(values)
-                print('crossfade_time:' + str(self.config.crossfade_time))
-                print("buffer_num:" + str(self.config.buffer_num))
-                print("samplerate:" + str(self.config.samplerate))
                 print('block_time:' + str(self.config.block_time))
+                print('crossfade_time:' + str(self.config.crossfade_time))
+                print("extra_time:" + str(self.config.extra_time))
+                print("samplerate:" + str(self.config.samplerate))
                 print("prefix_pad_length:" + str(self.f_safe_prefix_pad_length))
                 print("mix_mode:" + str(self.config.spk_mix_dict))
                 print('using_cuda:' + str(torch.cuda.is_available()))
@@ -340,14 +346,14 @@ class GUI:
                 self.config.select_pitch_extractor = values['f0_mode']
             elif event == 'use_phase_vocoder':
                 self.config.use_phase_vocoder = values['use_phase_vocoder']
-            elif event == 'load_config' and self.flag_vc == False:
+            elif event == 'load_config' and not flag_vc:
                 if self.config.load(values['config_file_dir']):
                     self.update_values()
-            elif event == 'save_config' and self.flag_vc == False:
+            elif event == 'save_config' and not flag_vc:
                 self.set_values(values)
                 self.config.save(values['config_file_dir'])
-            elif event != 'start_vc' and self.flag_vc == True:
-                self.flag_vc = False
+            elif event != 'start_vc' and flag_vc:
+                self.stop_stream()
 
     def set_values(self, values):
         self.set_devices(values["sg_input_device"], values['sg_output_device'])
@@ -359,7 +365,7 @@ class GUI:
         self.config.samplerate = int(values['samplerate'])
         self.config.block_time = float(values['block'])
         self.config.crossfade_time = float(values['crossfade'])
-        self.config.buffer_num = int(values['buffernum'])
+        self.config.extra_time = float(values['extra'])
         self.config.select_pitch_extractor = values['f0_mode']
         self.config.use_phase_vocoder = values['use_phase_vocoder']
         self.config.use_spk_mix = values['spk_mix']
@@ -372,10 +378,11 @@ class GUI:
         self.crossfade_frame = int(self.config.crossfade_time * self.config.samplerate)
         self.sola_search_frame = int(0.01 * self.config.samplerate)
         self.last_delay_frame = int(0.02 * self.config.samplerate)
-        self.input_frames = max(
+        self.extra_frame = int(self.config.extra_time * self.config.samplerate)
+        self.input_frame = max(
             self.block_frame + self.crossfade_frame + self.sola_search_frame + 2 * self.last_delay_frame,
-            (1 + self.config.buffer_num) * self.block_frame)
-        self.f_safe_prefix_pad_length = self.config.block_time * self.config.buffer_num - self.config.crossfade_time - 0.01 - 0.02
+            self.block_frame + self.extra_frame)
+        self.f_safe_prefix_pad_length = self.config.extra_time - self.config.crossfade_time - 0.01 - 0.02
 
     def update_values(self):
         self.window['sg_model'].update(self.config.checkpoint_path)
@@ -388,7 +395,7 @@ class GUI:
         self.window['spk_mix'].update(self.config.use_spk_mix)
         self.window['block'].update(self.config.block_time)
         self.window['crossfade'].update(self.config.crossfade_time)
-        self.window['buffernum'].update(self.config.buffer_num)
+        self.window['extra'].update(self.config.extra_time)
         self.window['f0_mode'].update(self.config.select_pitch_extractor)
         self.window['diff_silence'].update(self.config.diff_silence)
         self.window['diff_method'].update(self.config.diff_method)
@@ -399,26 +406,34 @@ class GUI:
     def start_vc(self):
         '''开始音频转换'''
         torch.cuda.empty_cache()
-        self.flag_vc = True
-        self.input_wav = np.zeros(self.input_frames, dtype='float32')
+        self.input_wav = np.zeros(self.input_frame, dtype='float32')
         self.sola_buffer = torch.zeros(self.crossfade_frame, device=self.device)
         self.fade_in_window = torch.sin(
             np.pi * torch.arange(0, 1, 1 / self.crossfade_frame, device=self.device) / 2) ** 2
         self.fade_out_window = 1 - self.fade_in_window
         self.svc_model.update_model(self.config.checkpoint_path, self.config.diff_project)
-        thread_vc = threading.Thread(target=self.soundinput)
-        thread_vc.start()
+        self.start_stream()
 
-    def soundinput(self):
-        '''
-        接受音频输入
-        '''
-        with sd.Stream(callback=self.audio_callback, blocksize=self.block_frame, samplerate=self.config.samplerate,
-                       dtype='float32'):
-            while self.flag_vc:
-                time.sleep(self.config.block_time)
-                print('Audio block passed.')
-        print('ENDing VC')
+    def start_stream(self):
+        global flag_vc
+        if not flag_vc:
+            flag_vc = True
+            self.stream = sd.Stream(
+                channels=2,
+                callback=self.audio_callback,
+                blocksize=self.block_frame,
+                samplerate=self.config.samplerate,
+                dtype="float32")
+            self.stream.start()
+
+    def stop_stream(self):
+        global flag_vc
+        if flag_vc:
+            flag_vc = False
+            if self.stream is not None:
+                self.stream.stop()
+                self.stream.close()
+                self.stream = None
 
     def audio_callback(self, indata: np.ndarray, outdata: np.ndarray, frames, times, status):
         '''
@@ -489,39 +504,37 @@ class GUI:
         outdata[:] = temp_wav[: - self.crossfade_frame, None].repeat(1, 2).cpu().numpy()
         end_time = time.perf_counter()
         print('infer_time: ' + str(end_time - start_time))
-        self.window['infer_time'].update(int((end_time - start_time) * 1000))
+        if flag_vc:
+            self.window['infer_time'].update(int((end_time - start_time) * 1000))
 
-    def get_devices(self, update: bool = True):
+    def update_devices(self):
         '''获取设备列表'''
-        if update:
-            sd._terminate()
-            sd._initialize()
+        sd._terminate()
+        sd._initialize()
         devices = sd.query_devices()
         hostapis = sd.query_hostapis()
         for hostapi in hostapis:
             for device_idx in hostapi["devices"]:
                 devices[device_idx]["hostapi_name"] = hostapi["name"]
-        input_devices = [
+        self.input_devices = [
             f"{d['name']} ({d['hostapi_name']})"
             for d in devices
             if d["max_input_channels"] > 0
         ]
-        output_devices = [
+        self.output_devices = [
             f"{d['name']} ({d['hostapi_name']})"
             for d in devices
             if d["max_output_channels"] > 0
         ]
-        input_devices_indices = [d["index"] for d in devices if d["max_input_channels"] > 0]
-        output_devices_indices = [
+        self.input_devices_indices = [d["index"] for d in devices if d["max_input_channels"] > 0]
+        self.output_devices_indices = [
             d["index"] for d in devices if d["max_output_channels"] > 0
         ]
-        return input_devices, output_devices, input_devices_indices, output_devices_indices
 
     def set_devices(self, input_device, output_device):
         '''设置输出设备'''
-        input_devices, output_devices, input_device_indices, output_device_indices = self.get_devices()
-        sd.default.device[0] = input_device_indices[input_devices.index(input_device)]
-        sd.default.device[1] = output_device_indices[output_devices.index(output_device)]
+        sd.default.device[0] = self.input_devices_indices[self.input_devices.index(input_device)]
+        sd.default.device[1] = self.output_devices_indices[self.output_devices.index(output_device)]
         print("input device:" + str(sd.default.device[0]) + ":" + str(input_device))
         print("output device:" + str(sd.default.device[1]) + ":" + str(output_device))
 

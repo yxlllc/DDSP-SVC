@@ -36,6 +36,12 @@ class F0_Extractor:
                 from encoder.rmvpe import RMVPE
                 F0_KERNEL['rmvpe'] = RMVPE('pretrain/rmvpe/model.pt', hop_length=160)
             self.rmvpe = F0_KERNEL['rmvpe']
+        if f0_extractor == 'fcpe':
+            self.device_fcpe = 'cuda' if torch.cuda.is_available() else 'cpu'
+            if 'fcpe' not in F0_KERNEL :
+                from torchfcpe import spawn_bundled_infer_model
+                F0_KERNEL['fcpe'] = spawn_bundled_infer_model(device=self.device_fcpe)
+            self.fcpe = F0_KERNEL['fcpe']
                 
     def extract(self, audio, uv_interp = False, device = None, silence_front = 0): # audio: 1d numpy array
         # extractor start time
@@ -110,31 +116,21 @@ class F0_Extractor:
             uv = np.interp(target_time, origin_time, uv.astype(float)) > 0.5
             f0[uv] = 0
             f0 = np.pad(f0, (start_frame, 0))
-
+        
+        # extract f0 using fcpe
         elif self.f0_extractor == "fcpe":
-            if device is None:
-                device = 'cuda' if torch.cuda.is_available() else 'cpu'
-            _JUMP_SAFE_PAD = False
-            if self.transformer_f0 is None:
-                # from encoder.fcpe.model import FCPEInfer
-                # self.transformer_f0 = FCPEInfer(model_path='pretrain/fcpe/fcpe.pt')
-                from torchfcpe import spawn_bundled_infer_model
-                self.transformer_f0 = spawn_bundled_infer_model(device=device)
-            if _JUMP_SAFE_PAD:
-                raw_audio = audio
-            #f0 = self.transformer_f0(audio=raw_audio, sr=self.sample_rate)
-            _raw_audio = torch.from_numpy(raw_audio).float().unsqueeze(0).unsqueeze(-1).to(device)
-            f0 = self.transformer_f0(_raw_audio, self.sample_rate, threshold=0.005)
-            f0 = f0.transpose(1, 2)
-            if not _JUMP_SAFE_PAD:
-                f0 = torch.nn.functional.interpolate(f0, size=int(n_frames), mode='nearest')
-            f0 = f0.transpose(1, 2)
+            _audio = torch.from_numpy(audio).to(self.device_fcpe).unsqueeze(0)
+            f0 = self.fcpe(_audio, sr=self.sample_rate, decoder_mode="local_argmax", threshold=0.006)
             f0 = f0.squeeze().cpu().numpy()
-            if _JUMP_SAFE_PAD:
-                f0 = np.array(
-                    [f0[int(min(int(np.round(n * self.hop_size / self.sample_rate / 0.01)), len(f0) - 1))] for n in
-                     range(n_frames - start_frame)])
-                f0 = np.pad(f0.astype('float'), (start_frame, n_frames - len(f0) - start_frame))
+            uv = f0 == 0
+            if len(f0[~uv]) > 0:
+                f0[uv] = np.interp(np.where(uv)[0], np.where(~uv)[0], f0[~uv])
+            origin_time = 0.01 * np.arange(len(f0))
+            target_time = self.hop_size / self.sample_rate * np.arange(n_frames - start_frame)
+            f0 = np.interp(target_time, origin_time, f0)
+            uv = np.interp(target_time, origin_time, uv.astype(float)) > 0.5
+            f0[uv] = 0
+            f0 = np.pad(f0, (start_frame, 0))
             
         else:
             raise ValueError(f" [x] Unknown f0 extractor: {f0_extractor}")
