@@ -298,11 +298,12 @@ class GUI:
 
     def event_handler(self):
         '''事件处理'''
+        global flag_vc
         while True:  # 事件处理循环
             event, values = self.window.read()
             print('event: ' + event)
             if event == sg.WINDOW_CLOSED:  # 如果用户关闭窗口
-                self.flag_vc = False
+                flag_vc = False
                 exit()
             elif event == 'start_vc' and not flag_vc:
                 # set values 和界面布局layout顺序一一对应
