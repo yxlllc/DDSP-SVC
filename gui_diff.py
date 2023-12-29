@@ -194,7 +194,6 @@ class Config:
 class GUI:
     def __init__(self) -> None:
         self.config = Config()
-        self.flag_vc: bool = False  # 变声线程flag
         self.block_frame = 0
         self.crossfade_frame = 0
         self.sola_search_frame = 0
