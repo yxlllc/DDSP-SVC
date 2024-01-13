@@ -6,6 +6,8 @@ import torch.nn as nn
 from torch.nn.utils import weight_norm
 
 from .pcmer import PCmer
+from .model_conformer_naive import ConformerNaiveEncoder
+
 
 
 def split_to_dict(tensor, tensor_splits):
@@ -28,7 +30,8 @@ class Unit2Control(nn.Module):
             n_spk,
             output_splits,
             use_pitch_aug=False,
-            pcmer_norm=False):
+            pcmer_norm=False,
+            use_naive_v2=False):
         super().__init__()
         self.output_splits = output_splits
         self.f0_embed = nn.Linear(1, 256)
@@ -50,15 +53,25 @@ class Unit2Control(nn.Module):
                 nn.Conv1d(256, 256, 3, 1, 1)) 
 
         # transformer
-        self.decoder = PCmer(
-            num_layers=3,
-            num_heads=8,
-            dim_model=256,
-            dim_keys=256,
-            dim_values=256,
-            residual_dropout=0.1,
-            attention_dropout=0.1,
-            pcmer_norm=pcmer_norm)
+        if use_naive_v2:
+            self.decoder = ConformerNaiveEncoder(
+                num_layers=3,
+                num_heads=8,
+                dim_model=256,
+                use_norm=False,
+                conv_only=True,
+                conv_dropout=0,
+                atten_dropout=0.1)
+        else:
+            self.decoder = PCmer(
+                num_layers=3,
+                num_heads=8,
+                dim_model=256,
+                dim_keys=256,
+                dim_values=256,
+                residual_dropout=0.1,
+                attention_dropout=0.1,
+                pcmer_norm=pcmer_norm)
         self.norm = nn.LayerNorm(256)
 
         # out
