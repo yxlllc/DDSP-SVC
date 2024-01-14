@@ -4,7 +4,7 @@ import torch
 from torch.optim import lr_scheduler
 from logger import utils
 from diffusion.data_loaders import get_data_loaders
-from diffusion.vocoder import Vocoder, Unit2Mel, Unit2Wav
+from diffusion.vocoder import Vocoder, Unit2Mel, Unit2Wav, Unit2WavFast
 
 
 def parse_args(args=None, namespace=None):
@@ -53,10 +53,20 @@ if __name__ == '__main__':
                 args.model.use_pitch_aug,
                 vocoder.dimension,
                 args.model.n_layers,
-                args.model.n_chans,
-                pcmer_norm=args.model.pcmer_norm)
-        print(' > pcmer_norm:', args.model.pcmer_norm)
-                
+                args.model.n_chans)
+    
+    elif args.model.type == 'DiffusionFast':
+        from diffusion.solver_new import train
+        model = Unit2WavFast(
+                args.data.sampling_rate,
+                args.data.block_size,
+                args.model.win_length,
+                args.data.encoder_out_channels, 
+                args.model.n_spk,
+                args.model.use_pitch_aug,
+                vocoder.dimension,
+                args.model.n_layers,
+                args.model.n_chans)           
     else:
         raise ValueError(f" [x] Unknown Model: {args.model.type}")
     

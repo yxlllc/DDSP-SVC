@@ -9,7 +9,8 @@ from nsf_hifigan.models import load_model,load_config
 from torchaudio.transforms import Resample
 from .diffusion import GaussianDiffusion
 from .wavenet import WaveNet
-from ddsp.vocoder import CombSubFast
+from .naive_v2_diff import NaiveV2Diff
+from ddsp.vocoder import CombSubFast, CombSubSuperFast
 
 class DotDict(dict):
     def __getattr__(*args):         
@@ -53,6 +54,19 @@ def load_model_vocoder(
                 args.model.n_layers,
                 args.model.n_chans,
                 pcmer_norm=args.model.pcmer_norm)
+    
+    elif args.model.type == 'DiffusionFast':
+        model = Unit2WavFast(
+                args.data.sampling_rate,
+                args.data.block_size,
+                args.model.win_length,
+                args.data.encoder_out_channels, 
+                args.model.n_spk,
+                args.model.use_pitch_aug,
+                vocoder.dimension,
+                args.model.n_layers,
+                args.model.n_chans)
+                
     else:
         raise ValueError(f" [x] Unknown Model: {args.model.type}")
         
@@ -219,6 +233,54 @@ class Unit2Wav(nn.Module):
         super().__init__()
         self.ddsp_model = CombSubFast(sampling_rate, block_size, n_unit, n_spk, use_pitch_aug, pcmer_norm=pcmer_norm)
         self.diff_model = GaussianDiffusion(WaveNet(out_dims, n_layers, n_chans, 256), out_dims=out_dims)
+
+    def forward(self, units, f0, volume, spk_id=None, spk_mix_dict=None, aug_shift=None, vocoder=None,
+                gt_spec=None, infer=True, return_wav=False, infer_speedup=10, method='dpm-solver', k_step=None, use_tqdm=True):
+        
+        '''
+        input: 
+            B x n_frames x n_unit
+        return: 
+            dict of B x n_frames x feat
+        '''
+        ddsp_wav, hidden, (_, _) = self.ddsp_model(units, f0, volume, spk_id=spk_id, spk_mix_dict=spk_mix_dict, aug_shift=aug_shift, infer=infer)
+        if vocoder is not None:
+            ddsp_mel = vocoder.extract(ddsp_wav)
+        else:
+            ddsp_mel = None
+            
+        if not infer:
+            ddsp_loss = F.mse_loss(ddsp_mel, gt_spec)
+            diff_loss = self.diff_model(hidden, gt_spec=gt_spec, k_step=k_step, infer=False)
+            return ddsp_loss, diff_loss
+        else:
+            if gt_spec is not None and ddsp_mel is None:
+                ddsp_mel = gt_spec
+            if k_step > 0:
+                mel = self.diff_model(hidden, gt_spec=ddsp_mel, infer=True, infer_speedup=infer_speedup, method=method, k_step=k_step, use_tqdm=use_tqdm)
+            else:
+                mel = ddsp_mel
+            if return_wav:
+                return vocoder.infer(mel, f0)
+            else:
+                return mel
+                
+
+class Unit2WavFast(nn.Module):
+    def __init__(
+            self,
+            sampling_rate,
+            block_size,
+            win_length,
+            n_unit,
+            n_spk,
+            use_pitch_aug=False,
+            out_dims=128,
+            n_layers=20, 
+            n_chans=384):
+        super().__init__()
+        self.ddsp_model = CombSubSuperFast(sampling_rate, block_size, win_length, n_unit, n_spk, use_pitch_aug)
+        self.diff_model = GaussianDiffusion(NaiveV2Diff(mel_channels=out_dims, dim=n_chans, num_layers=n_layers, condition_dim=256), out_dims=out_dims)
 
     def forward(self, units, f0, volume, spk_id=None, spk_mix_dict=None, aug_shift=None, vocoder=None,
                 gt_spec=None, infer=True, return_wav=False, infer_speedup=10, method='dpm-solver', k_step=None, use_tqdm=True):
