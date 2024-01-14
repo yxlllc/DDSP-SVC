@@ -5,7 +5,7 @@ import torch
 from logger import utils
 from data_loaders import get_data_loaders
 from solver import train
-from ddsp.vocoder import Sins, CombSub, CombSubFast
+from ddsp.vocoder import Sins, CombSub, CombSubFast, CombSubSuperFast
 from ddsp.loss import RSSLoss
 
 
@@ -57,6 +57,14 @@ if __name__ == '__main__':
         model = CombSubFast(
             sampling_rate=args.data.sampling_rate,
             block_size=args.data.block_size,
+            n_unit=args.data.encoder_out_channels,
+            n_spk=args.model.n_spk)
+    
+    elif args.model.type == 'CombSubSuperFast':
+        model = CombSubSuperFast(
+            sampling_rate=args.data.sampling_rate,
+            block_size=args.data.block_size,
+            win_length=args.model.win_length,
             n_unit=args.data.encoder_out_channels,
             n_spk=args.model.n_spk)
             
