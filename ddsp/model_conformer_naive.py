@@ -103,6 +103,7 @@ class CFNEncoderLayer(nn.Module):
                  conv_model_type='mode1'
                  ):
         super().__init__()
+        self.use_pre_norm = use_pre_norm
 
         self.conformer = ConformerConvModule(
             dim_model,
@@ -138,7 +139,11 @@ class CFNEncoderLayer(nn.Module):
             torch.Tensor: Output tensor (#batch, length, dim_model)
         """
         if self.attn is not None:
-            x = x + (self.attn(self.norm(x), mask=mask))
+            if self.use_pre_norm:
+                x = self.norm(x) + x
+            else:
+                x = self.norm(x)
+            x = x + (self.attn(x, mask=mask))
 
         x = x + (self.conformer(x))
 
