@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 
+
 # From https://github.com/CNChTu/Diffusion-SVC/ by CNChTu
 # License: MIT
 
@@ -13,6 +14,8 @@ class ConformerNaiveEncoder(nn.Module):
         dim_model (int): Dimension of model
         num_layers (int): Number of layers
         num_heads (int): Number of heads
+        expansion_factor (int): Expansion factor of conv module, default 2
+        kernel_size (int): Kernel size of conv module, default 31
         use_norm (bool): Whether to use norm for FastAttention, only True can use bf16/fp16, default False
         conv_only (bool): Whether to use only conv module without attention, default False
         conv_dropout (float): Dropout rate of conv module, default 0.
@@ -23,10 +26,14 @@ class ConformerNaiveEncoder(nn.Module):
                  num_layers: int,
                  num_heads: int,
                  dim_model: int,
+                 expansion_factor: int = 2,
+                 kernel_size: int = 31,
                  use_norm: bool = False,
                  conv_only: bool = False,
                  conv_dropout: float = 0.,
-                 atten_dropout: float = 0.
+                 atten_dropout: float = 0.,
+                 use_pre_norm=False,
+                 conv_model_type='mode1'
                  ):
         super().__init__()
         self.num_layers = num_layers
@@ -38,7 +45,18 @@ class ConformerNaiveEncoder(nn.Module):
 
         self.encoder_layers = nn.ModuleList(
             [
-                CFNEncoderLayer(dim_model, num_heads, use_norm, conv_only, conv_dropout, atten_dropout)
+                CFNEncoderLayer(
+                    dim_model=dim_model,
+                    expansion_factor=expansion_factor,
+                    kernel_size=kernel_size,
+                    num_heads=num_heads,
+                    use_norm=use_norm,
+                    conv_only=conv_only,
+                    conv_dropout=conv_dropout,
+                    atten_dropout=atten_dropout,
+                    use_pre_norm=use_pre_norm,
+                    conv_model_type=conv_model_type
+                )
                 for _ in range(num_layers)
             ]
         )
@@ -63,6 +81,8 @@ class CFNEncoderLayer(nn.Module):
 
     Args:
         dim_model (int): Dimension of model
+        expansion_factor (int): Expansion factor of conv module, default 2
+        kernel_size (int): Kernel size of conv module, default 31
         num_heads (int): Number of heads
         use_norm (bool): Whether to use norm for FastAttention, only True can use bf16/fp16, default False
         conv_only (bool): Whether to use only conv module without attention, default False
@@ -72,15 +92,26 @@ class CFNEncoderLayer(nn.Module):
 
     def __init__(self,
                  dim_model: int,
+                 expansion_factor: int = 2,
+                 kernel_size: int = 31,
                  num_heads: int = 8,
                  use_norm: bool = False,
                  conv_only: bool = False,
                  conv_dropout: float = 0.,
-                 atten_dropout: float = 0.1
+                 atten_dropout: float = 0.1,
+                 use_pre_norm=False,
+                 conv_model_type='mode1'
                  ):
         super().__init__()
 
-        self.conformer = ConformerConvModule(dim_model, use_norm=use_norm, dropout=conv_dropout)
+        self.conformer = ConformerConvModule(
+            dim_model,
+            expansion_factor=expansion_factor,
+            kernel_size=kernel_size,
+            use_norm=use_norm,
+            dropout=conv_dropout,
+            use_pre_norm=use_pre_norm,
+            conv_model_type=conv_model_type)
 
         self.norm = nn.LayerNorm(dim_model)
 
@@ -122,7 +153,8 @@ class ConformerConvModule(nn.Module):
             kernel_size=31,
             dropout=0.,
             use_norm=False,
-            conv_model_type='mode1'
+            conv_model_type='mode1',
+            use_pre_norm=False
     ):
         super().__init__()
 
@@ -130,8 +162,15 @@ class ConformerConvModule(nn.Module):
         padding = calc_same_padding(kernel_size)
 
         if conv_model_type == 'mode1':
+            if use_norm:
+                if use_pre_norm:
+                    _norm = PreNorm(dim)
+                else:
+                    _norm = nn.LayerNorm(dim)
+            else:
+                _norm = nn.Identity()
             self.net = nn.Sequential(
-                nn.LayerNorm(dim) if use_norm else nn.Identity(),
+                _norm,
                 Transpose((1, 2)),
                 nn.Conv1d(dim, inner_dim * 2, 1),
                 nn.GLU(dim=1),
@@ -163,3 +202,12 @@ class Transpose(nn.Module):
 
     def forward(self, x):
         return x.transpose(*self.dims)
+
+
+class PreNorm(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.norm = nn.LayerNorm(dim)
+
+    def forward(self, x):
+        return self.norm(x) + x
