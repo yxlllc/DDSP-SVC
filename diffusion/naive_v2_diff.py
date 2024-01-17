@@ -4,7 +4,7 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 from torch import nn
-from .model_conformer_naive import ConformerConvModule
+from ddsp.model_conformer_naive import ConformerConvModule
 import random
 
 
@@ -43,6 +43,7 @@ class NaiveV2DiffLayer(nn.Module):
                  kernel_size=31,
                  wavenet_like=False,
                  conv_model_type='mode1',
+                 use_pre_norm=False,
                  ):
         super().__init__()
 
@@ -52,7 +53,8 @@ class NaiveV2DiffLayer(nn.Module):
             kernel_size=kernel_size,
             dropout=conv_dropout,
             use_norm=use_norm,
-            conv_model_type=conv_model_type
+            conv_model_type=conv_model_type,
+            use_pre_norm=use_pre_norm,
         )
         self.norm = nn.LayerNorm(dim_model)
 
@@ -116,6 +118,7 @@ class NaiveV2Diff(nn.Module):
             wavenet_like=False,
             use_norm=True,
             conv_model_type='mode1',
+            use_pre_norm=False,
     ):
         super(NaiveV2Diff, self).__init__()
         self.wavenet_like = wavenet_like
@@ -154,6 +157,7 @@ class NaiveV2Diff(nn.Module):
                     kernel_size=kernel_size,
                     wavenet_like=wavenet_like,
                     conv_model_type=conv_model_type,
+                    use_pre_norm=use_pre_norm,
                 )
                 for i in range(num_layers)
             ]
