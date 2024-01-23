@@ -157,8 +157,8 @@ def parse_args(args=None, namespace=None):
         "--pitch_extractor",
         type=str,
         required=False,
-        default='fcpe',
-        help="pitch extrator type: parselmouth, dio, harvest, crepe, rmvpe, fcpe (default)",
+        default='rmvpe',
+        help="pitch extrator type: parselmouth, dio, harvest, crepe, fcpe, rmvpe (default)",
     )
     parser.add_argument(
         "-fmin",
@@ -319,7 +319,7 @@ def infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, unit
 
     input_mel = None
     k_step = None
-    if args.model.type == 'DiffusionNew':
+    if args.model.type == 'DiffusionNew' or args.model.type == 'DiffusionFast':
         if cmd.k_step is not None:
             k_step = int(cmd.k_step)
             if k_step > args.model.k_step_max:

@@ -280,7 +280,7 @@ class Unit2WavFast(nn.Module):
             n_chans=384):
         super().__init__()
         self.ddsp_model = CombSubSuperFast(sampling_rate, block_size, win_length, n_unit, n_spk, use_pitch_aug)
-        self.diff_model = GaussianDiffusion(NaiveV2Diff(mel_channels=out_dims, dim=n_chans, num_layers=n_layers, condition_dim=256), out_dims=out_dims)
+        self.diff_model = GaussianDiffusion(NaiveV2Diff(mel_channels=out_dims, dim=n_chans, num_layers=n_layers, condition_dim=out_dims), out_dims=out_dims)
 
     def forward(self, units, f0, volume, spk_id=None, spk_mix_dict=None, aug_shift=None, vocoder=None,
                 gt_spec=None, infer=True, return_wav=False, infer_speedup=10, method='dpm-solver', k_step=None, use_tqdm=True):
@@ -299,13 +299,13 @@ class Unit2WavFast(nn.Module):
             
         if not infer:
             ddsp_loss = F.mse_loss(ddsp_mel, gt_spec)
-            diff_loss = self.diff_model(hidden, gt_spec=gt_spec, k_step=k_step, infer=False)
+            diff_loss = self.diff_model(ddsp_mel, gt_spec=gt_spec, k_step=k_step, infer=False)
             return ddsp_loss, diff_loss
         else:
             if gt_spec is not None and ddsp_mel is None:
                 ddsp_mel = gt_spec
             if k_step > 0:
-                mel = self.diff_model(hidden, gt_spec=ddsp_mel, infer=True, infer_speedup=infer_speedup, method=method, k_step=k_step, use_tqdm=use_tqdm)
+                mel = self.diff_model(ddsp_mel, gt_spec=ddsp_mel, infer=True, infer_speedup=infer_speedup, method=method, k_step=k_step, use_tqdm=use_tqdm)
             else:
                 mel = ddsp_mel
             if return_wav:
