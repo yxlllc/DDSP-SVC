@@ -4,7 +4,7 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 from torch import nn
-from ddsp.model_conformer_naive import ConformerConvModule
+from .model_conformer_naive import ConformerConvModule
 import random
 
 
@@ -33,9 +33,10 @@ class NaiveV2DiffLayer(nn.Module):
 
     def __init__(self,
                  dim_model: int,
+                 dim_cond: int,
                  num_heads: int = 4,
-                 use_norm: bool = True,
-                 conv_only: bool = False,
+                 use_norm: bool = False,
+                 conv_only: bool = True,
                  conv_dropout: float = 0.,
                  atten_dropout: float = 0.1,
                  use_mlp=True,
@@ -52,7 +53,7 @@ class NaiveV2DiffLayer(nn.Module):
             kernel_size=kernel_size,
             dropout=conv_dropout,
             use_norm=use_norm,
-            conv_model_type=conv_model_type
+            conv_model_type=conv_model_type,
         )
         self.norm = nn.LayerNorm(dim_model)
 
@@ -62,12 +63,8 @@ class NaiveV2DiffLayer(nn.Module):
         else:
             self.wavenet_like_proj = None
 
-        if use_mlp:
-            self.diffusion_step_projection = nn.Conv1d(dim_model, dim_model, 1)
-            self.condition_projection = nn.Conv1d(dim_model, dim_model, 1)
-        else:
-            self.diffusion_step_projection = nn.Linear(dim_model, dim_model)
-            self.condition_projection = nn.Linear(dim_model, dim_model)
+        self.diffusion_step_projection = nn.Conv1d(dim_model, dim_model, 1)
+        self.condition_projection = nn.Conv1d(dim_cond, dim_model, 1)
 
         # selfatt -> fastatt: performer!
         if not conv_only:
@@ -87,7 +84,7 @@ class NaiveV2DiffLayer(nn.Module):
         x = x.transpose(1, 2)
 
         if self.attn is not None:
-            x = (self.attn(self.norm(x), mask=None))
+            x = (self.attn(self.norm(x)))
 
         x = self.conformer(x)  # (#batch, dim_model, length)
 
@@ -114,39 +111,42 @@ class NaiveV2Diff(nn.Module):
             kernel_size=31,
             conv_only=True,
             wavenet_like=False,
-            use_norm=True,
+            use_norm=False,
             conv_model_type='mode1',
+            conv_dropout=0.0,
+            atten_dropout=0.1,
     ):
         super(NaiveV2Diff, self).__init__()
         self.wavenet_like = wavenet_like
         self.mask_cond_ratio = None
 
         self.input_projection = nn.Conv1d(mel_channels, dim, 1)
+        self.diffusion_embedding = nn.Sequential(
+            DiffusionEmbedding(dim),
+            nn.Linear(dim, dim * mlp_factor),
+            nn.GELU(),
+            nn.Linear(dim * mlp_factor, dim),
+        )
+        
         if use_mlp:
-            self.diffusion_embedding = nn.Sequential(
-                DiffusionEmbedding(dim),
-                nn.Linear(dim, dim * mlp_factor),
-                nn.GELU(),
-                nn.Linear(dim * mlp_factor, dim),
-            )
             self.conditioner_projection = nn.Sequential(
                 nn.Conv1d(condition_dim, dim * mlp_factor, 1),
                 nn.GELU(),
                 nn.Conv1d(dim * mlp_factor, dim, 1),
             )
         else:
-            self.diffusion_embedding = DiffusionEmbedding(dim)
-            self.conditioner_projection = nn.Conv1d(condition_dim, dim, 1)
+            self.conditioner_projection = nn.Identity()
 
         self.residual_layers = nn.ModuleList(
             [
                 NaiveV2DiffLayer(
                     dim_model=dim,
+                    dim_cond=dim if use_mlp else condition_dim,
                     num_heads=8,
                     use_norm=use_norm,
                     conv_only=conv_only,
-                    conv_dropout=0.0,
-                    atten_dropout=0.1,
+                    conv_dropout=conv_dropout,
+                    atten_dropout=atten_dropout,
                     use_mlp=use_mlp,
                     expansion_factor=expansion_factor,
                     kernel_size=kernel_size,
