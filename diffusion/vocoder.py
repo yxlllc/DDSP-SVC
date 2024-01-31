@@ -228,7 +228,7 @@ class Unit2Wav(nn.Module):
             use_pitch_aug=False,
             out_dims=128,
             n_layers=20, 
-            n_chans=384,
+            n_chans=512,
             pcmer_norm=False):
         super().__init__()
         self.ddsp_model = CombSubFast(sampling_rate, block_size, n_unit, n_spk, use_pitch_aug, pcmer_norm=pcmer_norm)
@@ -276,11 +276,11 @@ class Unit2WavFast(nn.Module):
             n_spk,
             use_pitch_aug=False,
             out_dims=128,
-            n_layers=20, 
-            n_chans=384):
+            n_layers=6, 
+            n_chans=512):
         super().__init__()
         self.ddsp_model = CombSubSuperFast(sampling_rate, block_size, win_length, n_unit, n_spk, use_pitch_aug)
-        self.diff_model = GaussianDiffusion(NaiveV2Diff(mel_channels=out_dims, dim=n_chans, num_layers=n_layers, condition_dim=out_dims), out_dims=out_dims)
+        self.diff_model = GaussianDiffusion(NaiveV2Diff(mel_channels=out_dims, dim=n_chans, num_layers=n_layers, condition_dim=out_dims, use_mlp=False), out_dims=out_dims)
 
     def forward(self, units, f0, volume, spk_id=None, spk_mix_dict=None, aug_shift=None, vocoder=None,
                 gt_spec=None, infer=True, return_wav=False, infer_speedup=10, method='dpm-solver', k_step=None, use_tqdm=True):
