@@ -666,7 +666,11 @@ class CombSubSuperFast(torch.nn.Module):
         
         # combtooth exciter signal 
         combtooth = torch.sinc(self.sampling_rate * x / (f0 + 1e-3))
-        combtooth = combtooth.squeeze(-1)     
+        combtooth = combtooth.squeeze(-1)
+        if combtooth.shape[-1] > self.win_length // 2:
+            pad_mode = 'reflect'
+        else:
+            pad_mode = 'constant'
         combtooth_stft = torch.stft(
                             combtooth,
                             n_fft = self.win_length,
@@ -674,7 +678,8 @@ class CombSubSuperFast(torch.nn.Module):
                             hop_length = self.block_size,
                             window = self.window,
                             center = True,
-                            return_complex = True)
+                            return_complex = True,
+                            pad_mode = pad_mode)
         
         # noise exciter signal
         noise = torch.randn_like(combtooth)
@@ -685,7 +690,8 @@ class CombSubSuperFast(torch.nn.Module):
                             hop_length = self.block_size,
                             window = self.window,
                             center = True,
-                            return_complex = True)
+                            return_complex = True,
+                            pad_mode = pad_mode)
         
         # apply the filters 
         signal_stft = combtooth_stft * src_filter.permute(0, 2, 1) + noise_stft * noise_filter.permute(0, 2, 1)
