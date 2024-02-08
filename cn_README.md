@@ -2,6 +2,42 @@ Language: [English](./README.md) **简体中文**
 
 # DDSP-SVC
 
+## (5.0 升级) 改进的 DDSP 级联扩散模型
+
+安装依赖，数据准备，配置编码器（hubert 或者 contentvec) ，声码器 (nsf-hifigan) 与音高提取器 (RMVPE) 的环节与训练纯 DDSP 模型相同 （见下面的章节）。
+
+我们在 release 页面提供了一个预训练模型。
+
+将名为`model_0.pt`的预训练模型, 放到`diffusion-fast.yaml`里面 "expdir: exp/\*\*\*\*\*" 参数指定的模型导出文件夹内, 没有就新建一个, 程序会自动加载该文件夹下的预训练模型。
+
+（1）预处理：
+
+```bash
+python preprocess.py -c configs/diffusion-fast.yaml
+```
+
+（2）训练级联模型 (只训练一个模型)：
+
+```bash
+python train_diff.py -c configs/diffusion-fast.yaml
+```
+
+（3）非实时推理：
+
+```bash
+python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+```
+
+5.0 版本模型内置了 DDSP 模型，因此不需要使用 -ddsp 指定外部 DDSP 模型， 其他选项与 3.0 版本模型含义相同，但 kstep 需要小于等于配置文件中的 `k_step_max`，建议保持相等 （默认是 100）。
+
+（4）实时 GUI :
+
+```bash
+python gui_diff.py
+```
+
+注：你需要在 GUI 的右手边加载 5.0 版本模型。
+
 ## (4.0 升级) 新的 DDSP 级联扩散模型
 
 安装依赖，数据准备，配置编码器（hubert 或者 contentvec) ，声码器 (nsf-hifigan) 与音高提取器 (RMVPE) 的环节与训练纯 DDSP 模型相同 （见下面的章节）。
@@ -121,6 +157,8 @@ DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个�
 
 4.0 更新：支持最先进的 RMVPE 音高提取器，联合训练 DDSP 与扩散模型，提升推理与训练速度，进一步提升合成质量。
 
+5.0 更新：支持更快速的 FCPE 音高提取器，改进 DDSP 模型与扩散模型，提升推理与训练速度，进一步提升合成质量。
+
 ## 1. 安装依赖
 
 1.  安装 PyTorch：我们推荐从 [\*\*PyTorch 官方网站 \*\*](https://pytorch.org/) 下载 PyTorch.
@@ -230,7 +268,7 @@ python preprocess.py -c configs/sins.yaml
 
 1.  您可以在预处理之前修改配置文件 `config/<model_name>.yaml`，默认配置适用于 GTX-1660 显卡训练 44.1khz 高采样率合成器。
 
-2.  如果要训练扩散模型，见上述 3.0 或 4.0 章节
+2.  如果要训练扩散模型，见上述 3.0, 4.0 或 5.0 章节
 
 ### 3. 备注：
 
@@ -323,3 +361,5 @@ python gui.py
 - [DiffSinger (OpenVPI version)](https://github.com/openvpi/DiffSinger)
 
 - [Diff-SVC](https://github.com/prophesier/diff-svc)
+
+- [Diffusion-SVC](https://github.com/CNChTu/Diffusion-SVC)

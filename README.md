@@ -2,6 +2,42 @@ Language: **English** [简体中文](./cn_README.md) [한국어（outdated）](.
 
 # DDSP-SVC
 
+## (5.0 - Update) Improved DDSP cascade diffusion model
+
+Installing dependencies, data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) are the same as training a pure DDSP model (See section below).
+
+We provide a pre-trained model in the release page.
+
+Move the `model_0.pt` to the model export folder specified by the 'expdir' parameter in `diffusion-fast.yaml`, and the program will automatically load the pre-trained model in that folder.
+
+(1) Preprocessing：
+
+```bash
+python preprocess.py -c configs/diffusion-fast.yaml
+```
+
+(2) Train a cascade model (only train one model)：
+
+```bash
+python train_diff.py -c configs/diffusion-fast.yaml
+```
+
+(3) Non-real-time inference：
+
+```bash
+python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+```
+
+The 5.0 version model has a built-in DDSP model, so specifying an external DDSP model using `-ddsp` is unnecessary. The other options have the same meaning as the 3.0 version model, but 'kstep' needs to be less than or equal to `k_step_max` in the configuration file, it is recommended to keep it equal (the default is 100)
+
+(4) Real-time GUI：
+
+```bash
+python gui_diff.py
+```
+
+Note: You need to load the version 5.0 model on the right hand side of the GUI
+
 ## (4.0 - Update) New DDSP cascade diffusion model
 
 Installing dependencies, data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) are the same as training a pure DDSP model (See section below).
@@ -168,7 +204,7 @@ python preprocess.py -c configs/sins.yaml
 
 for a model of sinusoids additive synthesiser.
 
-For training the diffusion model, see section 3.0 or 4.0 above.
+For training the diffusion model, see section 3.0, 4.0 or 5.0 above.
 
 You can modify the configuration file `config/<model_name>.yaml` before preprocessing. The default configuration is suitable for training 44.1khz high sampling rate synthesiser with GTX-1660 graphics card.
 
@@ -296,3 +332,5 @@ Update: A splicing algorithm based on a phase vocoder is now added, but in most 
 - [DiffSinger (OpenVPI version)](https://github.com/openvpi/DiffSinger)
 
 - [Diff-SVC](https://github.com/prophesier/diff-svc)
+
+- [Diffusion-SVC](https://github.com/CNChTu/Diffusion-SVC)
