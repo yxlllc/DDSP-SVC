@@ -133,7 +133,7 @@ class F0_Extractor:
             f0 = np.pad(f0, (start_frame, 0))
             
         else:
-            raise ValueError(f" [x] Unknown f0 extractor: {f0_extractor}")
+            raise ValueError(f" [x] Unknown f0 extractor: {self.f0_extractor}")
                     
         # interpolate the unvoiced f0 
         if uv_interp:
