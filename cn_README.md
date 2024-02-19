@@ -183,9 +183,13 @@ pip install -r requirements.txt
 
 - 声码器或增强器：
 
-下载预训练 [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-v1/nsf_hifigan_20221211.zip) 声码器并解压至 `pretrain/` 文件夹。
+下载并解压预训练 [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-44.1k-hop512-128bin-2024.02/nsf_hifigan_44.1k_hop512_128bin_2024.02.zip) 声码器
 
 或者使用 https://github.com/openvpi/SingingVocoders 微调声码器以获得更高音质。
+
+然后重命名权重文件并放置在配置文件中 'vocoder.ckpt' 参数指定的位置，默认值是 `pretrain/nsf_hifigan/model`。
+
+声码器的 'config.json' 需要在同目录，比如 `pretrain/nsf_hifigan/config.json`。
 
 - 音高提取器:
 
