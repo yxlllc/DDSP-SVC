@@ -279,9 +279,6 @@ class GaussianDiffusion(nn.Module):
     def p_mean_variance(self, x, t, cond):
         noise_pred = self.denoise_fn(x, t, cond=cond)
         x_recon = self.predict_start_from_noise(x, t=t, noise=noise_pred)
-
-        x_recon.clamp_(-1., 1.)
-
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x, t=t)
         return model_mean, posterior_variance, posterior_log_variance
 
