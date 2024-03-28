@@ -2,6 +2,28 @@ Language: **English** [简体中文](./cn_README.md) [한국어（outdated）](.
 
 # DDSP-SVC
 
+## (6.0 - Experimental) New rectified-flow based model
+
+(1) Preprocessing：
+
+```bash
+python preprocess.py -c configs/reflow.yaml
+```
+
+(2) Training：
+
+```bash
+python train_reflow.py -c configs/reflow.yaml
+```
+
+(3) Non-real-time inference：
+
+```bash
+python main_reflow.py -i <input.wav> -m <model_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -step <infer_step> -method <method> -ts <t_start>
+```
+'infer_step' is the number of sampling steps for rectified-flow ODE, 't_start' is the start time point of ODE, which needs to be larger than or equal to `infer_step` in the configuration file, it is recommended to keep it equal (the default is 0.7)
+
+
 ## (5.0 - Update) Improved DDSP cascade diffusion model
 
 Installing dependencies, data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) are the same as training a pure DDSP model (See section below).

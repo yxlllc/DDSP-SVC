@@ -1,5 +1,5 @@
 data:
-  f0_extractor: 'parselmouth' # 'parselmouth', 'dio', 'harvest', 'crepe' or 'rmvpe'
+  f0_extractor: 'rmvpe' # 'parselmouth', 'dio', 'harvest', 'crepe' or 'rmvpe'
   f0_min: 65 # about C2
   f0_max: 800 # about G5
   sampling_rate: 44100
