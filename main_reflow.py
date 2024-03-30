@@ -280,10 +280,13 @@ if __name__ == '__main__':
     
     # t_start
     if cmd.t_start == 'auto':
-        t_start = float(args.infer.t_start)
+        if args.model.t_start is not None:
+            t_start = float(args.model.t_start)
+        else:
+            t_start = 0.0
     else:
         t_start = float(cmd.t_start)
-        if t_start < args.model.t_start:
+        if args.model.t_start is not None and t_start < args.model.t_start:
             t_start = args.model.t_start
             
     if infer_step > 0:
