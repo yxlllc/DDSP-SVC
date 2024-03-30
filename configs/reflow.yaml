@@ -28,8 +28,8 @@ vocoder:
   type: 'nsf-hifigan'
   ckpt: 'pretrain/nsf_hifigan/model'
 infer:
-  infer_step: 10
-  method: 'euler' # 'euler'
+  infer_step: 20
+  method: 'euler' # 'euler', 'rk4'
 env:
   expdir: exp/reflow-test
   gpu_id: 0

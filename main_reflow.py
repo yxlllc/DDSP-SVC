@@ -186,7 +186,7 @@ if __name__ == '__main__':
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
-    # load diffusion model
+    # load reflow model
     model, vocoder, args = load_model_vocoder(cmd.model_ckpt, device=device)
     
     # load input
