@@ -64,7 +64,7 @@ class RectifiedFlow(nn.Module):
             x_1 = self.norm_spec(gt_spec)
             x_1 = x_1.transpose(1, 2)[:, None, :, :]  # [B, 1, M, T]
             t = t_start + (1.0 - t_start) * torch.rand(b, device=device)
-            t = torch.clip(t, 1e-8, 1-1e-8)
+            t = torch.clip(t, 1e-7, 1-1e-7)
             return self.reflow_loss(x_1, t, cond=cond)
         else:
             shape = (cond.shape[0], 1, self.out_dims, cond.shape[2]) # [B, 1, M, T]
