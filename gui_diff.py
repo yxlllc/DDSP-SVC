@@ -1,4 +1,4 @@
-import PySimpleGUI as sg
+import FreeSimpleGUI as sg
 import sounddevice as sd
 import torch, librosa, threading, pickle
 from enhancer import Enhancer
