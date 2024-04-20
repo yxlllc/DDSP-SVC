@@ -199,11 +199,10 @@ class GUI:
         self.sola_search_frame = 0
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.svc_model: SvcDDSP = SvcDDSP()
-        self.fade_in_window: np.ndarray = None  # crossfade计算用numpy数组
-        self.fade_out_window: np.ndarray = None  # crossfade计算用numpy数组
-        self.input_wav: np.ndarray = None  # 输入音频规范化后的保存地址
-        self.output_wav: np.ndarray = None  # 输出音频规范化后的保存地址
-        self.sola_buffer: torch.Tensor = None  # 保存上一个output的crossfade
+        self.fade_in_window: torch.Tensor = None  
+        self.fade_out_window: torch.Tensor = None  
+        self.input_wav: np.ndarray = None
+        self.sola_buffer: torch.Tensor = None
         self.f0_mode_list = ["parselmouth", "dio", "harvest", "crepe" ,"rmvpe", "fcpe"]  # F0预测器
         self.diff_method_list = ["ddim", "pndm", "dpm-solver", "unipc"] # 加速采样方法
         self.f_safe_prefix_pad_length: float = 0.0
