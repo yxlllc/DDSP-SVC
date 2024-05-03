@@ -1,358 +1,219 @@
-Language: [English](./README.md) **简体中文**
-
+语言: [English](./README.md) **简体中文** [한국어](./ko_README.md)
 # DDSP-SVC
 
-## (5.0 升级) 改进的 DDSP 级联扩散模型
+## (6.0 - 实验性更新) 新的基于修正流的模型
 
-安装依赖，数据准备，配置编码器（hubert 或者 contentvec) ，声码器 (nsf-hifigan) 与音高提取器 (RMVPE) 的环节与训练纯 DDSP 模型相同 （见下面的章节）。
-
-我们在 release 页面提供了一个预训练模型。
-
-将名为`model_0.pt`的预训练模型, 放到`diffusion-fast.yaml`里面 "expdir: exp/\*\*\*\*\*" 参数指定的模型导出文件夹内, 没有就新建一个, 程序会自动加载该文件夹下的预训练模型。
-
-（1）预处理：
+(1) 数据预处理：
 
 ```bash
-python preprocess.py -c configs/diffusion-fast.yaml
+python -m ddspsvc.preprocess -c configs/reflow.yaml
 ```
 
-（2）训练级联模型 (只训练一个模型)：
+(2) 训练：
 
 ```bash
-python train_diff.py -c configs/diffusion-fast.yaml
+python -m ddspsvc.train_reflow -c configs/reflow.yaml
 ```
 
-（3）非实时推理：
+(3) 非实时推理：
 
 ```bash
-python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+python -m ddspsvc.main_reflow -i <input.wav> -m <model_ckpt.pt> -o <output.wav> -k <keychange（半音）> -id <说话者ID> -step <推理步骤> -method <方法> -ts <开始时间>
 ```
+'infer_step' 是修正流 ODE 的采样步骤数，'method' 是 'euler' 或 'rk4'，'t_start' 是 ODE 的起始时间点，需要大于或等于配置文件中的 `t_start`，建议保持相等（默认为 0.7）
 
-5.0 版本模型内置了 DDSP 模型，因此不需要使用 -ddsp 指定外部 DDSP 模型， 其他选项与 3.0 版本模型含义相同，但 kstep 需要小于等于配置文件中的 `k_step_max`，建议保持相等 （默认是 100）。
 
-（4）实时 GUI :
+## (5.0 - 更新) 改进的 DDSP 级联扩散模型
+
+安装依赖项、数据准备、配置预训练编码器（hubert 或 contentvec）、音高提取器（RMVPE）和声码器（nsf-hifigan）与训练纯 DDSP 模型相同（参见下文）。
+
+我们在发布页面提供了一个预训练模型。
+
+将 `model_0.pt` 移动到 `diffusion-fast.yaml` 中 'expdir' 参数指定的模型导出文件夹，并且程序将自动加载该文件夹中的预训练模型。
+
+(1) 数据预处理：
 
 ```bash
-python gui_diff.py
+python -m ddspsvc.preprocess -c configs/diffusion-fast.yaml
 ```
 
-注：你需要在 GUI 的右手边加载 5.0 版本模型。
-
-## (4.0 升级) 新的 DDSP 级联扩散模型
-
-安装依赖，数据准备，配置编码器（hubert 或者 contentvec) ，声码器 (nsf-hifigan) 与音高提取器 (RMVPE) 的环节与训练纯 DDSP 模型相同 （见下面的章节）。
-
-我们提供了一个预训练模型：
-<https://huggingface.co/datasets/ms903/DDSP-SVC-4.0/resolve/main/pre-trained-model/model_0.pt> (使用 'contentvec768l12' 编码器)
-
-将名为`model_0.pt`的预训练模型, 放到`diffusion-new.yaml`里面 "expdir: exp/\*\*\*\*\*" 参数指定的模型导出文件夹内, 没有就新建一个, 程序会自动加载该文件夹下的预训练模型。
-
-（1）预处理：
+(2) 训练级联模型（仅训练一个模型）：
 
 ```bash
-python preprocess.py -c configs/diffusion-new.yaml
+python -m ddspsvc.train_diff -c configs/diffusion-fast.yaml
 ```
 
-（2）训练级联模型 (只训练一个模型)：
+(3) 非实时推理：
 
 ```bash
-python train_diff.py -c configs/diffusion-new.yaml
+python -m ddspsvc.main_diff -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange（半音）> -id <说话者ID> -speedup <加速度> -method <方法> -kstep <kstep>
 ```
 
-注：fp16 训练暂时有问题，fp32 和 bf16 是可以正常训练的。
+5.0 版本模型内置了 DDSP 模型，因此使用 `-ddsp` 指定外部 DDSP 模型是不必要的。其他选项的含义与 3.0 版本模型相同，但 'kstep' 需要小于或等于配置文件中的 `k_step_max`，建议保持相等（默认为 100）
 
-（3）非实时推理：
+(4) 实时 GUI：
 
 ```bash
-python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+python -m ddspsvc.gui_diff
 ```
 
-4.0 版本模型内置了 DDSP 模型，因此不需要使用 -ddsp 指定外部 DDSP 模型， 其他选项与 3.0 版本模型含义相同，但 kstep 需要小于等于配置文件中的 `k_step_max`，建议保持相等 （默认是 100）。
+注意：您需要在 GUI 的右侧加载 5.0 版本模型
 
-（4）实时 GUI :
+
+## (4.0 - 更新) 新的 DDSP 级联扩散模型
+
+安装依赖项、数据准备、配置预训练编码器（hubert 或 contentvec）、音高提取器（RMVPE）和声码器（nsf-hifigan）与训练纯 DDSP 模型相同（参见下文）。
+
+我们在此提供了一个预训练模型：[点击此处下载](https://huggingface.co/datasets/ms903/DDSP-SVC-4.0/resolve/main/pre-trained-model/model_0.pt)（使用 'contentvec768l12' 编码器）
+
+将 `model_0.pt` 移动到 `diffusion-new.yaml` 中 'expdir' 参数指定的模型导出文件夹，并且程序将自动加载该文件夹中的预训练模型。
+
+(1) 数据预处理：
 
 ```bash
-python gui_diff.py
+python -m ddspsvc.preprocess -c configs/diffusion-new.yaml
 ```
 
-注：你需要在 GUI 的右手边加载 4.0 版本模型。
+(2) 训练级联模型（仅训练一个模型）：
 
-## （3.0 升级）浅扩散模型 （DDSP + Diff-SVC 重构版）
+```bash
+python -m ddspsvc.train_diff -c configs/diffusion-new.yaml
+```
+
+注意：fp16 训练存在临时问题，但是 fp32 和 bf16 正常工作。
+
+(3) 非实时推理：
+
+```bash
+python -m ddspsvc.main_diff -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange（半音）> -id <说话者ID> -speedup <加速度> -method <方法> -kstep <kstep>
+```
+
+4.0 版本模型内置了 DDSP 模型，因此使用 `-ddsp` 指定外部 DDSP 模型是不必要的。其他选项的含义与 3.0 版本模型相同，但 'kstep' 需要小于或等于配置文件中的 `k_step_max`，建议保持相等（默认为 100）
+
+(4) 实时 GUI：
+
+```bash
+python -m ddspsvc.gui_diff
+```
+
+注意：您需要在 GUI 的右侧加载 4.0 版本模型
+
+
+## (3.0 - 更新) 浅层扩散模型（DDSP + Diff-SVC 重构版）
 
 ![Diagram](diagram.png)
 
-安装依赖，数据准备，配置编码器（hubert 或者 contentvec) ，声码器 (nsf-hifigan) 与音高提取器 (RMVPE) 的环节与训练纯 DDSP 模型相同 （见下面的章节）。
+安装依赖项、数据准备、配置预训练编码器（hubert 或 contentvec）、音高提取器（RMVPE）和声码器（nsf-hifigan）与训练纯 DDSP 模型相同（参见第 1 \~ 3 章）。
 
-因为扩散模型更难训练，我们提供了一些预训练模型：
+由于扩散模型更难训练，我们在此提供了一些预训练模型：
 
-<https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/hubertsoft_fix_pitch_add_vctk_500k/model_0.pt> (使用 'hubertsoft' 编码器)
+[ContentVec](https://github.com/auspicious3000/contentvec) 编码器预训练模型
 
-<https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/fix_pitch_add_vctk_600k/model_0.pt> (使用 'contentvec768l12' 编码器)
+[HubertSoft](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) 编码器预训练模型
 
-将名为`model_0.pt`的预训练模型, 放到`diffusion.yaml`里面 "expdir: exp/\*\*\*\*\*" 参数指定的模型导出文件夹内, 没有就新建一个, 程序会自动加载该文件夹下的预训练模型。
+[NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-44.1k-hop512-128bin-2024.02/nsf_hifigan_44.1k_hop512_128bin_202
 
-（1）预处理：
+4.02.zip) 声码器预训练模型
 
-```bash
-python preprocess.py -c configs/diffusion.yaml
-```
+[RMVPE](https://github.com/yxlllc/RMVPE/releases/download/230917/rmvpe.zip) 音高提取器预训练模型
 
-这个预处理也能用来训练 DDSP 模型，不用预处理两遍（但需要保证 yaml 里面的 data 下面的参数均一致）
+将下载的预训练模型移动到相应的文件夹，并修改配置文件中的路径。
 
-（2）训练扩散模型：
+## 3. 数据预处理
 
-```bash
-python train_diff.py -c configs/diffusion.yaml
-```
-
-（3）训练 DDSP 模型：
+将所有训练数据集（.wav 格式音频片段）放在以下目录中：`data/train/audio`。将所有验证数据集（.wav 格式音频片段）放在以下目录中：`data/val/audio`。您也可以运行
 
 ```bash
-python train.py -c configs/combsub.yaml
+python -m ddspsvc.draw
 ```
 
-如上所述，可以不需要重新预处理，但请检查 combsub.yaml 与 diffusion.yaml 是否参数匹配。说话人数 n_spk 可以不一致，但是尽量用相同的编号表示相同的说话人（推理更简单）。
+以帮助您选择验证数据（您可以调整 `-m ddspsvc.draw` 中的参数以修改提取的文件数量和其他参数）
 
-（4）非实时推理：
+然后运行
 
 ```bash
-python main_diff.py -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+python -m ddspsvc.preprocess -c configs/combsub.yaml
 ```
 
-speedup 为加速倍速，method 为 ddim, pndm, dpm-solver 或 unipc, kstep 为浅扩散步数，diffid 为扩散模型的说话人 id，其他参数与 main.py 含义相同。
-
-合理的 kstep 约为 100\~300，speedup 超过 20 时可能将感知到音质损失。
-
-如果训练时已经用相同的编号表示相同的说话人，则 -diffid 可以为空，否则需要指定 -diffid 选项。
-
-如果 -ddsp 为空，则使用纯扩散模型 ，此时以输入源的 mel 进行浅扩散，若进一步 -kstep 为空，则进行完整深度的高斯扩散。
-
-程序会自动检查 DDSP 模型和扩散模型的参数是否匹配 （采样率，帧长和编码器），不匹配会忽略加载 DDSP 模型并进入高斯扩散模式。
-
-（5）实时 GUI :
+用于 combtooth substractive synthesiser 模型的数据预处理（**推荐**），或者运行
 
 ```bash
-python gui_diff.py
+python -m ddspsvc.preprocess -c configs/sins.yaml
 ```
 
-## 0.简介
+用于 sinusoids additive synthesiser 模型的数据预处理。
 
-DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个人电脑上普及的自由 AI 变声器软件。
+有关训练扩散模型的详细信息，请参见上文的第 3.0、4.0 或 5.0 章节。
 
-相比于著名的 [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc), 它训练和合成对电脑硬件的要求要低的多，并且训练时长有数量级的缩短，和 [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 的训练速度接近。
-
-另外在进行实时变声时，本项目的硬件资源消耗显著低于 SO-VITS-SVC , 但可能略高于 RVC 最新版本。
-
-虽然 DDSP 的原始合成质量不是很理想（训练时在 tensorboard 中可以听到原始输出），但在使用基于预训练声码器的增强器（老版本）或使用浅扩散模型（新版本）增强音质后，对于部分数据集可以达到不亚于 SOVITS-SVC 和 RVC 的合成质量。
-
-老版本的模型仍然是兼容的，以下章节是老版本的使用说明。新版本部分操作是相同的，见之前章节。
-
-免责声明：请确保仅使用**合法获得的授权数据**训练 DDSP-SVC 模型，不要将这些模型及其合成的任何音频用于非法目的。 本库作者不对因使用这些模型检查点和音频而造成的任何侵权，诈骗等违法行为负责。
-
-1.1 更新：支持多说话人和音色混合。
-
-2.0 更新：开始支持实时 vst 插件，并优化了 combsub 模型， 训练速度极大提升。旧的 combsub 模型仍然兼容，可用 combsub-old.yaml 训练，sins 模型不受影响，但由于训练速度远慢于 combsub, 目前版本已经不推荐使用。
-
-3.0 更新：由于作者删库 vst 插件取消支持，转为使用独立的实时变声前端；支持多种编码器，并将 contentvec768l12 作为默认编码器；引入浅扩散模型，合成质量极大提升。
-
-4.0 更新：支持最先进的 RMVPE 音高提取器，联合训练 DDSP 与扩散模型，提升推理与训练速度，进一步提升合成质量。
-
-5.0 更新：支持更快速的 FCPE 音高提取器，改进 DDSP 模型与扩散模型，提升推理与训练速度，进一步提升合成质量。
-
-## 1. 安装依赖
-
-1.  安装 PyTorch：我们推荐从 [\*\*PyTorch 官方网站 \*\*](https://pytorch.org/) 下载 PyTorch.
-
-2.  安装依赖
-
-```bash
-pip install -r requirements.txt
-```
-
-注： 仅在 python 3.8 (windows) + torch 1.9.1 + torchaudio 0.6.0 测试过代码，太旧或太新的依赖可能会报错。
-
-更新：python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 可以运行，训练速度更快了。
-
-## 2. 配置预训练模型
-
-- 特征编码器 (可只选其一)：
-
-(1) 下载预训练 [ContentVec](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) 编码器并将其放到 `pretrain/contentvec` 文件夹。
-
-(2) 下载预训练 [HubertSoft](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) 编码器并将其放到 `pretrain/hubert` 文件夹，同时修改配置文件。
-
-- 声码器或增强器：
-
-下载并解压预训练 [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-44.1k-hop512-128bin-2024.02/nsf_hifigan_44.1k_hop512_128bin_2024.02.zip) 声码器
-
-或者使用 https://github.com/openvpi/SingingVocoders 微调声码器以获得更高音质。
-
-然后重命名权重文件并放置在配置文件中 'vocoder.ckpt' 参数指定的位置，默认值是 `pretrain/nsf_hifigan/model`。
-
-声码器的 'config.json' 需要在同目录，比如 `pretrain/nsf_hifigan/config.json`。
-
-- 音高提取器:
-
-下载预训练 [RMVPE](https://github.com/yxlllc/RMVPE/releases/download/230917/rmvpe.zip) 提取器并解压至 `pretrain/` 文件夹
-
-## 3. 预处理
-
-### 1. 配置训练数据集和验证数据集
-
-#### 1.1 手动配置：
-
-将所有的训练集数据 (.wav 格式音频切片) 放到 `data/train/audio`。
-
-将所有的验证集数据 (.wav 格式音频切片) 放到 `data/val/audio`。
-
-#### 1.2 程序随机选择：
-
-运行`python draw.py`,程序将帮助你挑选验证集数据（可以调整 `draw.py` 中的参数修改抽取文件的数量等参数）。
-
-#### 1.3 文件夹结构目录展示：
-
-- 单人物目录结构：
-
-<!---->
-
-    data
-    ├─ train
-    │    ├─ audio
-    │    │    ├─ aaa.wav
-    │    │    ├─ bbb.wav
-    │    │    └─ ....wav
-    ├─ val
-    │    ├─ audio
-    │    │    ├─ eee.wav
-    │    │    ├─ fff.wav
-    │    │    └─ ....wav
-
-- 多人物目录结构：
-
-<!---->
-
-    data
-    ├─ train
-    │    ├─ audio
-    │    │    ├─ 1
-    │    │    │   ├─ aaa.wav
-    │    │    │   ├─ bbb.wav
-    │    │    │   └─ ....wav
-    │    │    ├─ 2
-    │    │    │   ├─ ccc.wav
-    │    │    │   ├─ ddd.wav
-    │    │    │   └─ ....wav
-    │    │    └─ ...
-    |
-    ├─ val
-    |    ├─ audio
-    │    │    ├─ 1
-    │    │    │   ├─ eee.wav
-    │    │    │   ├─ fff.wav
-    │    │    │   └─ ....wav
-    │    │    ├─ 2
-    │    │    │   ├─ ggg.wav
-    │    │    │   ├─ hhh.wav
-    │    │    │   └─ ....wav
-    │    │    └─ ...
-
-### 2. 样例合成器模型训练
-
-1.  训练基于梳齿波减法合成器的模型 (**推荐**)：
-
-```bash
-python preprocess.py -c configs/combsub.yaml
-```
-
-1.  训练基于正弦波加法合成器的模型：
-
-```bash
-python preprocess.py -c configs/sins.yaml
-```
-
-1.  您可以在预处理之前修改配置文件 `config/<model_name>.yaml`，默认配置适用于 GTX-1660 显卡训练 44.1khz 高采样率合成器。
-
-2.  如果要训练扩散模型，见上述 3.0, 4.0 或 5.0 章节
-
-### 3. 备注：
-
-1.  请保持所有音频切片的采样率与 yaml 配置文件中的采样率一致！如果不一致，程序可以跑，但训练过程中的重新采样将非常缓慢。（可选：使用 Adobe Audition™ 的响度匹配功能可以一次性完成重采样修改声道和响度匹配。）
-
-2.  训练数据集的音频切片总数建议为约 1000 个，另外长音频切成小段可以加快训练速度，但所有音频切片的时长不应少于 2 秒。如果音频切片太多，则需要较大的内存，配置文件中将 `cache_all_data` 选项设置为 false 可以解决此问题。
-
-3.  验证集的音频切片总数建议为 10 个左右，不要放太多，不然验证过程会很慢。
-
-4.  如果您的数据集质量不是很高，请在配置文件中将 'f0_extractor' 设为 'rmvpe'.
-
-5.  配置文件中的 ‘n_spk’ 参数将控制是否训练多说话人模型。如果您要训练**多说话人**模型，为了对说话人进行编号，所有音频文件夹的名称必须是**不大于 ‘n_spk’ 的正整数**。
+您可以在预处理之前修改配置文件 `config/<model_name>.yaml`。默认配置适用于使用 GTX-1660 显卡训练 44.1kHz 高采样率声码器。
 
 ## 4. 训练
 
 ```bash
-# 以训练 combsub 模型为例
-python train.py -c configs/combsub.yaml
+# 以 combsub 模型为例进行训练
+python -m ddspsvc.train -c configs/combsub.yaml
 ```
 
-1.  训练其他模型方法类似。
+训练其他模型的命令行类似。
 
-2.  可以随时中止训练，然后运行相同的命令来继续训练。
+您可以安全地中断训练，然后再次运行相同的命令行以恢复训练。
 
-3.  微调 (finetune)：在中止训练后，重新预处理新数据集或更改训练参数（batchsize、lr 等），然后运行相同的命令。
+如果首先中断训练，然后重新预处理新数据集或更改训练参数（批处理大小、学习率等），然后再次运行相同的命令行，您还可以微调模型。
 
 ## 5. 可视化
 
 ```bash
-# 使用tensorboard检查训练状态
+# 使用 tensorboard 检查训练状态
 tensorboard --logdir=exp
 ```
 
-第一次验证 (validation) 后，在 TensorBoard 中可以看到合成后的测试音频。
+在第一次验证后，测试音频样本将在 TensorBoard 中可见。
 
-注：TensorBoard 中的测试音频是 DDSP-SVC 模型的原始输出，并未通过增强器增强。 如果想测试模型使用增强器的合成效果（可能具有更高的合成质量），请使用下一章中描述的方法。
+注意：Tensorboard 中的测试音频样本是您的 DDSP-SVC 模型的原始输出，未经增强器增强。如果您想测试使用增强器（可能具有更高质量）增强后的合成效果，请使用以下章节中描述的方法。
 
-## 6. 非实时变声
+## 6. 非实时 VC
 
-1.  （**推荐**）使用预训练声码器增强 DDSP 的输出结果：
-
-```bash
-# 默认 enhancer_adaptive_key = 0 正常音域范围内将有更高的音质
-# 设置 enhancer_adaptive_key > 0 可将增强器适配于更高的音域
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -e true -eak <enhancer_adaptive_key (semitones)>
-```
-
-1.  DDSP 的原始输出结果：
+（**推荐**）使用预训练声码器增强器增强输出：
 
 ```bash
-# 速度快，但音质相对较低（像您在tensorboard里听到的那样）
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -e false -id <speaker_id>
+# 如果 enhancer_adaptive_key = 0（默认），则在正常音域中具有高音质
+# 将 enhancer_adaptive_key > 0 以将增强器调整到更高的音域
+python -m ddspsvc.main -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange（半音）> -id <说话者ID> -eak <增强器自适应键（半音）>
 ```
 
-1.  关于 f0 提取器、响应阈值及其他参数，参见:
+DDSP 的原始输出：
 
 ```bash
-python main.py -h
+# 快速，但相对低音质（就像您在 tensorboard 中听到的）
+python -m ddspsvc.main -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange（半音）> -id <说话者ID> -e false
 ```
 
-1.  如果要使用混合说话人（捏音色）功能，增添 “-mix” 选项来设计音色，下面是个例子：
+有关音高提取器和响应阈值的其他选项，请参见：
 
 ```bash
-# 将1号说话人和2号说话人的音色按照0.5:0.5的比例混合
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -e true -eak 0
+python -m ddspsvc.main -h
 ```
 
-## 7. 实时变声
-
-用以下命令启动简易操作界面:
+（更新）现在支持混合说话者。您可以使用 "-mix" 选项设计自己的声音品质，以下是一个示例：
 
 ```bash
-python gui.py
+# 在 1st 和 2nd 说话者之间以 0.5 到 0.5 的比例混合音色
+python -m ddspsvc.main -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange（半音）> -mix "{1:0.5, 2:0.5}" -eak 0
 ```
 
-该前端使用了滑动窗口，交叉淡化，基于 SOLA 的拼接和上下文语义参考等技术，在低延迟和资源占用的情况下可以达到接近非实时合成的音质。
+## 7. 实时 VC
 
-更新：现在加入了基于相位声码器的衔接算法，但是大多数情况下 SOLA 算法已经具有足够高的拼接音质，所以它默认是关闭状态。如果您追求极端的低延迟实时变声音质，可以考虑开启它并仔细调参，有概率音质更高。但大量测试发现，如果交叉淡化时长大于 0.1 秒，相位声码器反而会造成音质明显劣化。
+使用以下命令启动一个简单的 GUI：
 
-## 8. 感谢
+```bash
+python -m ddspsvc.gui
+```
+
+前端使用滑动窗口、交叉淡入淡出、基于 SOLA 的拼接和上下文语义参考等技术，可以实现接近非实时合成的声音质量，同时具有低延迟和资源占用。
+
+更新：现在添加了基于相位估计器的拼接算法，但在大多数情况下，SOLA 算法已经具有足够高的拼接声音质量，因此默认情况下已关闭。如果您追求极低延迟的实时声音质量，可以考虑打开它并仔细调整参数，这样可能会使声音质量更高。然而，大量测试发现，如果淡入淡出时间长于 0.1 秒，则相位估计器会导致声音质量显著下降。
+
+## 8. 致谢
 
 - [ddsp](https://github.com/magenta/ddsp)
 
@@ -362,7 +223,7 @@ python gui.py
 
 - [ContentVec](https://github.com/auspicious3000/contentvec)
 
-- [DiffSinger (OpenVPI version)](https://github.com/openvpi/DiffSinger)
+- [DiffSinger (OpenVPI 版本)](https://github.com/openvpi/DiffSinger)
 
 - [Diff-SVC](https://github.com/prophesier/diff-svc)
 

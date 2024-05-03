@@ -3,3 +3,9 @@ __pycache__/
 venv/
 results/
 cache/
+
+.ruff_cache/
+
+./*.wav
+
+pretrain
