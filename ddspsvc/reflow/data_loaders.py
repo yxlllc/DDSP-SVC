@@ -123,9 +123,9 @@ class AudioDataset(Dataset):
         self.data_buffer={}
         self.pitch_aug_dict = np.load(os.path.join(self.path_root, 'pitch_aug_dict.npy'), allow_pickle=True).item()
         if load_all_data:
-            logger.info('Load all the data from : {}', path_root)
+            print('Load all the data from : {}', path_root)
         else:
-            logger.info('Load the f0, volume data from : {}', path_root)
+            print('Load the f0, volume data from : {}', path_root)
         with Progress() as progress:
             for name_ext in progress.track(self.paths, total=len(self.paths)):
                 name = os.path.splitext(name_ext)[0]

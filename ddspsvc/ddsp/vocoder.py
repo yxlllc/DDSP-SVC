@@ -622,7 +622,7 @@ class CombSubSuperFast(torch.nn.Module):
             pcmer_norm=False):
         super().__init__()
 
-        logger.info(' [DDSP Model] Combtooth Subtractive Synthesiser')
+        print(' [DDSP Model] Combtooth Subtractive Synthesiser')
         # params
         self.register_buffer("sampling_rate", torch.tensor(sampling_rate))
         self.register_buffer("block_size", torch.tensor(block_size))

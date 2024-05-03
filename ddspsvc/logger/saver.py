@@ -64,7 +64,10 @@ class Saver(object):
             msg_str = msg
         
         # dsplay
-        logger.info(msg_str)
+        print(msg_str)
+
+        with open(self.path_log_info, 'a') as fp:
+            fp.write(msg_str+'\n')
 
     def log_value(self, dict):
         for k, v in dict.items():
