@@ -1,4 +1,4 @@
-Language: **English** [简体中文](./cn_README.md) [한국어（outdated）](./ko_README.md)
+Language: **English** [简体中文](./cn_README.md) [한국어](./ko_README.md)
 
 # DDSP-SVC
 
@@ -7,19 +7,19 @@ Language: **English** [简体中文](./cn_README.md) [한국어（outdated）](.
 (1) Preprocessing：
 
 ```bash
-python preprocess.py -c configs/reflow.yaml
+python -m ddspsvc.preprocess -c configs/reflow.yaml
 ```
 
 (2) Training：
 
 ```bash
-python train_reflow.py -c configs/reflow.yaml
+python -m ddspsvc.train_reflow -c configs/reflow.yaml
 ```
 
 (3) Non-real-time inference：
 
 ```bash
-python main_reflow.py -i <input.wav> -m <model_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -step <infer_step> -method <method> -ts <t_start>
+python -m ddspsvc.main_reflow -i <input.wav> -m <model_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -step <infer_step> -method <method> -ts <t_start>
 ```
 'infer_step' is the number of sampling steps for rectified-flow ODE, 'method' is 'euler' or 'rk4', 't_start' is the start time point of ODE, which needs to be larger than or equal to `t_start` in the configuration file, it is recommended to keep it equal (the default is 0.7)
 
@@ -35,19 +35,19 @@ Move the `model_0.pt` to the model export folder specified by the 'expdir' param
 (1) Preprocessing：
 
 ```bash
-python preprocess.py -c configs/diffusion-fast.yaml
+python -m ddspsvc.preprocess -c configs/diffusion-fast.yaml
 ```
 
 (2) Train a cascade model (only train one model)：
 
 ```bash
-python train_diff.py -c configs/diffusion-fast.yaml
+python -m ddspsvc.train_diff -c configs/diffusion-fast.yaml
 ```
 
 (3) Non-real-time inference：
 
 ```bash
-python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+python -m ddspsvc.main_diff -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
 ```
 
 The 5.0 version model has a built-in DDSP model, so specifying an external DDSP model using `-ddsp` is unnecessary. The other options have the same meaning as the 3.0 version model, but 'kstep' needs to be less than or equal to `k_step_max` in the configuration file, it is recommended to keep it equal (the default is 100)
@@ -55,7 +55,7 @@ The 5.0 version model has a built-in DDSP model, so specifying an external DDSP 
 (4) Real-time GUI：
 
 ```bash
-python gui_diff.py
+python -m ddspsvc.gui_diff
 ```
 
 Note: You need to load the version 5.0 model on the right hand side of the GUI
@@ -71,13 +71,13 @@ Move the `model_0.pt` to the model export folder specified by the 'expdir' param
 (1) Preprocessing：
 
 ```bash
-python preprocess.py -c configs/diffusion-new.yaml
+python -m ddspsvc.preprocess -c configs/diffusion-new.yaml
 ```
 
 (2) Train a cascade model (only train one model)：
 
 ```bash
-python train_diff.py -c configs/diffusion-new.yaml
+python -m ddspsvc.train_diff -c configs/diffusion-new.yaml
 ```
 
 Note: There is a temporary problem with fp16 training, but fp32 and bf16 are working normally,
@@ -85,7 +85,7 @@ Note: There is a temporary problem with fp16 training, but fp32 and bf16 are wor
 (3) Non-real-time inference：
 
 ```bash
-python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+python -m ddspsvc.main_diff -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
 ```
 
 The 4.0 version model has a built-in DDSP model, so specifying an external DDSP model using `-ddsp` is unnecessary. The other options have the same meaning as the 3.0 version model, but 'kstep' needs to be less than or equal to `k_step_max` in the configuration file, it is recommended to keep it equal (the default is 100)
@@ -93,7 +93,7 @@ The 4.0 version model has a built-in DDSP model, so specifying an external DDSP 
 (4) Real-time GUI：
 
 ```bash
-python gui_diff.py
+python -m ddspsvc.gui_diff
 ```
 
 Note: You need to load the version 4.0 model on the right hand side of the GUI
@@ -115,7 +115,7 @@ Move the `model_0.pt` to the model export folder specified by the 'expdir' param
 (1) Preprocessing：
 
 ```bash
-python preprocess.py -c configs/diffusion.yaml
+python -m ddspsvc.preprocess -c configs/diffusion.yaml
 ```
 
 This preprocessing can also be used to train the DDSP model without preprocessing twice, but you need to ensure that the parameters under the 'data' tag in yaml files are consistent.
@@ -123,13 +123,13 @@ This preprocessing can also be used to train the DDSP model without preprocessin
 (2) Train a diffusion model：
 
 ```bash
-python train_diff.py -c configs/diffusion.yaml
+python -m ddspsvc.train_diff -c configs/diffusion.yaml
 ```
 
 (3) Train a DDSP model：
 
 ```bash
-python train.py -c configs/combsub.yaml
+python -m ddspsvc.train -c configs/combsub.yaml
 ```
 
 As mentioned above, re-preprocessing is not required, but please check whether the parameters of `combsub.yaml` and `diffusion.yaml` match. The number of speakers 'n_spk' can be inconsistent, but try to use the same id to represent the same speaker (this makes inference easier).
@@ -137,10 +137,10 @@ As mentioned above, re-preprocessing is not required, but please check whether t
 (4) Non-real-time inference：
 
 ```bash
-python main_diff.py -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
+python -m ddspsvc.main_diff -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
 ```
 
-'speedup' is the acceleration speed, 'method' is 'ddim', 'pndm', 'dpm-solver' or 'unipc', 'kstep' is the number of shallow diffusion steps, 'diffid' is the speaker id of the diffusion model, and other parameters have the same meaning as `main.py`.
+'speedup' is the acceleration speed, 'method' is 'ddim', 'pndm', 'dpm-solver' or 'unipc', 'kstep' is the number of shallow diffusion steps, 'diffid' is the speaker id of the diffusion model, and other parameters have the same meaning as `-m ddspsvc.main`.
 
 A reasonable 'kstep' is about 100\~300. There may be a perceived loss of sound quality when ‘speedup’ exceeds 20.
 
@@ -153,7 +153,7 @@ The program will automatically check whether the parameters of the DDSP model an
 (5) Real-time GUI：
 
 ```bash
-python gui_diff.py
+python -m ddspsvc.gui_diff
 ```
 
 ## 0. Introduction
@@ -211,21 +211,21 @@ Download the pre-trained [RMVPE](https://github.com/yxlllc/RMVPE/releases/downlo
 Put all the training dataset (.wav format audio clips) in the below directory: `data/train/audio`. Put all the validation dataset (.wav format audio clips) in the below directory: `data/val/audio`. You can also run
 
 ```bash
-python draw.py
+python -m ddspsvc.draw
 ```
 
-to help you select validation data (you can adjust the parameters in `draw.py` to modify the number of extracted files and other parameters)
+to help you select validation data (you can adjust the parameters in `-m ddspsvc.draw` to modify the number of extracted files and other parameters)
 
 Then run
 
 ```bash
-python preprocess.py -c configs/combsub.yaml
+python -m ddspsvc.preprocess -c configs/combsub.yaml
 ```
 
 for a model of combtooth substractive synthesiser (**recommend**), or run
 
 ```bash
-python preprocess.py -c configs/sins.yaml
+python -m ddspsvc.preprocess -c configs/sins.yaml
 ```
 
 for a model of sinusoids additive synthesiser.
@@ -283,7 +283,7 @@ data/val/audio/ddd.wav
 
 ```bash
 # train a combsub model as an example
-python train.py -c configs/combsub.yaml
+python -m ddspsvc.train -c configs/combsub.yaml
 ```
 
 The command line for training other models is similar.
@@ -310,27 +310,27 @@ NOTE: The test audio samples in Tensorboard are the original outputs of your DDS
 ```bash
 # high audio quality in the normal vocal range if enhancer_adaptive_key = 0 (default)
 # set enhancer_adaptive_key > 0 to adapt the enhancer to a higher vocal range
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -eak <enhancer_adaptive_key (semitones)>
+python -m ddspsvc.main -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -eak <enhancer_adaptive_key (semitones)>
 ```
 
 Raw output of DDSP:
 
 ```bash
 # fast, but relatively low audio quality (like you hear in tensorboard)
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -e false
+python -m ddspsvc.main -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -e false
 ```
 
 Other options about the f0 extractor and response threhold，see:
 
 ```bash
-python main.py -h
+python -m ddspsvc.main -h
 ```
 
 (UPDATE) Mix-speaker is supported now. You can use "-mix" option to design your own vocal timbre, below is an example:
 
 ```bash
 # Mix the timbre of 1st and 2nd speaker in a 0.5 to 0.5 ratio
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -eak 0
+python -m ddspsvc.main -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -eak 0
 ```
 
 ## 7. Real-time VC
@@ -338,7 +338,7 @@ python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (
 Start a simple GUI with the following command:
 
 ```bash
-python gui.py
+python -m ddspsvc.gui
 ```
 
 The front-end uses technologies such as sliding window, cross-fading, SOLA-based splicing and contextual semantic reference, which can achieve sound quality close to non-real-time synthesis with low latency and resource occupation.
