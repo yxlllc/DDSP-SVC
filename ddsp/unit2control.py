@@ -31,7 +31,8 @@ class Unit2Control(nn.Module):
             output_splits,
             use_pitch_aug=False,
             pcmer_norm=False,
-            use_naive_v2=False):
+            use_naive_v2=False,
+            use_conv_stack=True):
         super().__init__()
         self.output_splits = output_splits
         self.f0_embed = nn.Linear(1, 256)
@@ -45,14 +46,15 @@ class Unit2Control(nn.Module):
         else:
             self.aug_shift_embed = None
             
-        # conv in stack
-        self.stack = nn.Sequential(
-                nn.Conv1d(input_channel, 256, 3, 1, 1),
-                nn.GroupNorm(4, 256),
-                nn.LeakyReLU(),
-                nn.Conv1d(256, 256, 3, 1, 1)) 
+        if use_conv_stack:
+            self.stack = nn.Sequential(
+                    nn.Conv1d(input_channel, 256, 3, 1, 1),
+                    nn.GroupNorm(4, 256),
+                    nn.LeakyReLU(),
+                    nn.Conv1d(256, 256, 3, 1, 1))
+        else:
+            self.stack = nn.Conv1d(input_channel, 256, 3, 1, 1)
 
-        # transformer
         if use_naive_v2:
             self.decoder = ConformerNaiveEncoder(
                 num_layers=3,
@@ -105,4 +107,3 @@ class Unit2Control(nn.Module):
         controls = split_to_dict(e, self.output_splits)
     
         return controls, x
-
