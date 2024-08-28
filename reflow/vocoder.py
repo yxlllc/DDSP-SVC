@@ -159,11 +159,14 @@ class Unit2Wav(nn.Module):
             n_layers=6, 
             n_chans=512):
         super().__init__()
+        self.sampling_rate = sampling_rate
+        self.block_size = block_size
         self.ddsp_model = CombSubSuperFast(sampling_rate, block_size, win_length, n_unit, n_spk, use_pitch_aug)
         self.reflow_model = RectifiedFlow(NaiveV2Diff(mel_channels=out_dims, dim=n_chans, num_layers=n_layers, condition_dim=out_dims, use_mlp=False), out_dims=out_dims)
 
     def forward(self, units, f0, volume, spk_id=None, spk_mix_dict=None, aug_shift=None, vocoder=None,
-                gt_spec=None, infer=True, return_wav=False, infer_step=10, method='euler', t_start=0.0, use_tqdm=True):
+                gt_spec=None, infer=True, return_wav=False, infer_step=10, method='euler', t_start=0.0, 
+                silence_front=0, use_tqdm=True):
         
         '''
         input: 
@@ -172,8 +175,9 @@ class Unit2Wav(nn.Module):
             dict of B x n_frames x feat
         '''
         ddsp_wav, hidden, (_, _) = self.ddsp_model(units, f0, volume, spk_id=spk_id, spk_mix_dict=spk_mix_dict, aug_shift=aug_shift, infer=infer)
+        start_frame = int(silence_front * self.sampling_rate / self.block_size)
         if vocoder is not None:
-            ddsp_mel = vocoder.extract(ddsp_wav)
+            ddsp_mel = vocoder.extract(ddsp_wav[:, start_frame * self.block_size:])
         else:
             ddsp_mel = None
             
@@ -189,6 +193,6 @@ class Unit2Wav(nn.Module):
             else:
                 mel = ddsp_mel
             if return_wav:
-                return vocoder.infer(mel, f0)
+                return vocoder.infer(mel, f0[:, -mel.shape[1]:])
             else:
                 return mel

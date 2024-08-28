@@ -141,8 +141,10 @@ class SvcDDSP:
                                     return_wav=True,
                                     infer_step=infer_step, 
                                     method=sampling_method,
-                                    t_start=t_start)
-            output *= mask
+                                    t_start=t_start,
+                                    silence_front=silence_front,
+                                    use_tqdm=False)
+            output *= mask[:, -output.shape[-1]:]
             output = output.squeeze()
             if audio_alignment:
                 output[:audio_length]
@@ -228,10 +230,10 @@ class GUI:
             ],
             [sg.Frame(layout=[
                     [sg.Text(i18n("模型文件：.pt格式(自动识别同目录下config.yaml)"))],
-                    [sg.Input(key='reflow_model', default_text='exp\\diffusion-new-demo\\model_200000.pt'),
+                    [sg.Input(key='reflow_model', default_text='exp\\reflow-test\\model_250000.pt'),
                      sg.FileBrowse(i18n('选择模型文件'), key='choose_model')],
-                    [sg.Text(i18n("采样步数")), sg.Input(key='infer_step', default_text='50', size=18)],
-                    [sg.Text(i18n("时间起点")), sg.Input(key='t_start', default_text='0.5', size=18)],
+                    [sg.Text(i18n("采样步数")), sg.Input(key='infer_step', default_text='20', size=18)],
+                    [sg.Text(i18n("时间起点")), sg.Input(key='t_start', default_text='0.7', size=18)],
                     [sg.Text(i18n("采样算法")),
                      sg.Combo(values=self.sampling_method_list, key='sampling_method', default_value=self.sampling_method_list[0],
                               enable_events=True)],
