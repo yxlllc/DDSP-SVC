@@ -7,6 +7,45 @@ from logger.saver import Saver
 from logger import utils
 from torch import autocast
 from torch.cuda.amp import GradScaler
+from nsf_hifigan.nvSTFT import STFT
+
+def calculate_mel_snr(gt_mel, pred_mel):
+    # 计算误差图像
+    error_image = gt_mel - pred_mel
+    # 计算参考图像的平方均值
+    mean_square_reference = torch.mean(gt_mel ** 2)
+    # 计算误差图像的方差
+    variance_error = torch.var(error_image)
+    # 计算并返回SNR
+    snr = 10 * torch.log10(mean_square_reference / variance_error)
+    return snr
+
+
+def calculate_mel_si_snr(gt_mel, pred_mel):
+    # 将测试图像按比例调整以最小化误差
+    scale = torch.sum(gt_mel * pred_mel) / torch.sum(gt_mel ** 2)
+    test_image_scaled = scale * pred_mel
+    # 计算误差图像
+    error_image = gt_mel - test_image_scaled
+    # 计算参考图像的平方均值
+    mean_square_reference = torch.mean(gt_mel ** 2)
+    # 计算误差图像的方差
+    variance_error = torch.var(error_image)
+    # 计算并返回SI-SNR
+    si_snr = 10 * torch.log10(mean_square_reference / variance_error)
+    return si_snr
+
+
+def calculate_mel_psnr(gt_mel, pred_mel):
+    # 计算误差图像
+    error_image = gt_mel - pred_mel
+    # 计算误差图像的均方误差
+    mse = torch.mean(error_image ** 2)
+    # 计算参考图像的最大可能功率
+    max_power = torch.max(gt_mel) ** 2
+    # 计算并返回PSNR
+    psnr = 10 * torch.log10(max_power / mse)
+    return psnr
 
 def test(args, model, vocoder, loader_test, saver):
     print(' [*] testing...')
@@ -15,10 +54,20 @@ def test(args, model, vocoder, loader_test, saver):
     # losses
     test_ddsp_loss = 0.
     test_reflow_loss = 0.
-    
+
+    # mel mse val
+    mel_val_mse_all = 0
+    mel_val_mse_all_num = 0
+    mel_val_snr_all = 0
+    mel_val_psnr_all = 0
+    mel_val_sisnr_all = 0
+
     # intialization
     num_batches = len(loader_test)
     rtf_all = []
+    spec_min = -2
+    spec_max = 10
+    spec_range = 12
     
     # run
     with torch.no_grad():
@@ -79,15 +128,65 @@ def test(args, model, vocoder, loader_test, saver):
                 audio = librosa.to_mono(audio)
             audio = torch.from_numpy(audio).unsqueeze(0).to(signal)
             saver.log_audio({fn+'/gt.wav': audio, fn+'/pred.wav': signal})
+
+            WAV2MEL = STFT(
+                        sr=args.data.sampling_rate,
+                        n_mels=128,
+                        n_fft=2048,
+                        win_size=2048,
+                        hop_length=512,
+                        fmin=40,
+                        fmax=22050,
+                        clip_val=1e-5)
+            audio = audio.unsqueeze(0)
+            pre_mel = WAV2MEL.get_mel(signal[0, ...])
+            pre_mel = pre_mel.transpose(-1, -2)
+            gt_mel = WAV2MEL.get_mel(audio[0, ...])
+            gt_mel = gt_mel.transpose(-1, -2)
+            # 如果形状不同,裁剪使得形状相同
+            if pre_mel.shape[1] != gt_mel.shape[1]:
+                gt_mel = gt_mel[:, :pre_mel.shape[1], :]
+            saver.log_spec(data['name'][0], gt_mel, pre_mel)
+
+            # 计算指标
+            mel_val_mse_all += torch.nn.functional.mse_loss(mel, data['mel']).detach().cpu().numpy()
+            gt_mel_norm = torch.clip(data['mel'], spec_min, spec_max)
+            gt_mel_norm = gt_mel_norm / spec_range + spec_min
+            pre_mel_norm = torch.clip(mel, spec_min, spec_max)
+            pre_mel_norm = pre_mel_norm / spec_range + spec_min
+            mel_val_snr_all += calculate_mel_snr(gt_mel_norm, pre_mel_norm).detach().cpu().numpy()
+            mel_val_psnr_all += calculate_mel_psnr(gt_mel_norm, pre_mel_norm).detach().cpu().numpy()
+            mel_val_sisnr_all += calculate_mel_si_snr(gt_mel_norm, pre_mel_norm).detach().cpu().numpy()
+            mel_val_mse_all_num += 1
             
     # report
     test_ddsp_loss /= num_batches
     test_reflow_loss /= num_batches 
-    
+    mel_val_mse_all /= mel_val_mse_all_num
+    mel_val_snr_all /= mel_val_mse_all_num
+    mel_val_psnr_all /= mel_val_mse_all_num
+    mel_val_sisnr_all /= mel_val_mse_all_num
+
     # check
     print(' [test_ddsp_loss] test_ddsp_loss:', test_ddsp_loss)
     print(' [test_reflow_loss] test_reflow_loss:', test_reflow_loss)
     print(' Real Time Factor', np.mean(rtf_all))
+    print(' Mel Val MSE', mel_val_mse_all)
+    saver.log_value({
+        'validation/mel_val_mse': mel_val_mse_all
+    })
+    print(' Mel Val SNR', mel_val_snr_all)
+    saver.log_value({
+        'validation/mel_val_snr': mel_val_snr_all
+    })
+    print(' Mel Val PSNR', mel_val_psnr_all)
+    saver.log_value({
+        'validation/mel_val_psnr': mel_val_psnr_all
+    })
+    print(' Mel Val SI-SNR', mel_val_sisnr_all)
+    saver.log_value({
+        'validation/mel_val_sisnr': mel_val_sisnr_all
+    })
     return test_ddsp_loss, test_reflow_loss
 
 
