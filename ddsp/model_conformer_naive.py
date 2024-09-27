@@ -1,10 +1,11 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 # From https://github.com/CNChTu/Diffusion-SVC/ by CNChTu
 # License: MIT
 
-
+      
 class ConformerNaiveEncoder(nn.Module):
     """
     Conformer Naive Encoder
@@ -81,12 +82,7 @@ class CFNEncoderLayer(nn.Module):
         super().__init__()
 
         self.conformer = ConformerConvModule(dim_model, use_norm=use_norm, dropout=conv_dropout)
-
-        self.norm = nn.LayerNorm(dim_model)
-
-        self.dropout = nn.Dropout(0.1)  # 废弃代码,仅做兼容性保留
-
-        # selfatt -> fastatt: performer!
+        
         if not conv_only:
             self.attn = nn.TransformerEncoderLayer(
                 d_model=dim_model,
@@ -95,6 +91,7 @@ class CFNEncoderLayer(nn.Module):
                 dropout=atten_dropout,
                 activation='gelu'
             )
+            self.norm = nn.LayerNorm(dim_model)
         else:
             self.attn = None
 
@@ -134,9 +131,9 @@ class ConformerConvModule(nn.Module):
                 nn.LayerNorm(dim) if use_norm else nn.Identity(),
                 Transpose((1, 2)),
                 nn.Conv1d(dim, inner_dim * 2, 1),
-                nn.GLU(dim=1),
+                SwiGLU(dim=1),
                 nn.Conv1d(inner_dim, inner_dim, kernel_size=kernel_size, padding=padding[0], groups=inner_dim),
-                nn.SiLU(),
+                nn.PReLU(num_parameters=inner_dim),
                 nn.Conv1d(inner_dim, dim, 1),
                 Transpose((1, 2)),
                 nn.Dropout(dropout)
@@ -163,3 +160,13 @@ class Transpose(nn.Module):
 
     def forward(self, x):
         return x.transpose(*self.dims)
+
+
+class SwiGLU(nn.Module):
+    ## Swish-Applies the gated linear unit function.
+    def __init__(self, dim=-1):
+        super().__init__()
+        self.dim = dim
+    def forward(self, x):
+        out, gate = x.chunk(2, dim=self.dim)
+        return out * F.silu(gate)

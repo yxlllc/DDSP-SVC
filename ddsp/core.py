@@ -147,18 +147,13 @@ def fft_convolve(audio,
     batch_size_ir, n_ir_frames, ir_size = ir_shape
     batch_size, audio_size = audio.size() # B, T
 
-    # Validate that batch sizes match.
-    if batch_size != batch_size_ir:
-        raise ValueError('Batch size of audio ({}) and impulse response ({}) must '
-                        'be the same.'.format(batch_size, batch_size_ir))
-
     # Cut audio into 50% overlapped frames (center padding).
-    hop_size = int(audio_size / n_ir_frames)
+    hop_size = audio_size // n_ir_frames
     frame_size = 2 * hop_size    
-    audio_frames = F.pad(audio, (hop_size, hop_size)).unfold(1, frame_size, hop_size)
+    audio_frames = F.pad(audio, (hop_size, hop_size)).unfold(1, frame_size, hop_size) # B, n_frames+1, 2*hop_size
     
     # Apply Bartlett (triangular) window
-    window = torch.bartlett_window(frame_size).to(audio_frames)
+    window = torch.bartlett_window(frame_size, device=audio_frames.device)
     audio_frames = audio_frames * window
     
     # Pad and FFT the audio and impulse responses.
@@ -180,92 +175,26 @@ def fft_convolve(audio,
     # Crop and shift the output audio.
     output_signal = crop_and_compensate_delay(output_signal[:,hop_size:], audio_size, ir_size)
     return output_signal
-    
 
-def apply_window_to_impulse_response(impulse_response, # B, n_frames, 2*(n_mag-1)
-                                     window_size: int = 0,
-                                     causal: bool = False):
-    """Apply a window to an impulse response and put in causal form.
-    Args:
-        impulse_response: A series of impulse responses frames to window, of shape
-        [batch, n_frames, ir_size]. ---------> ir_size means size of filter_bank ??????
-        
-        window_size: Size of the window to apply in the time domain. If window_size
-        is less than 1, it defaults to the impulse_response size.
-        causal: Impulse response input is in causal form (peak in the middle).
-    Returns:
-        impulse_response: Windowed impulse response in causal form, with last
-        dimension cropped to window_size if window_size is greater than 0 and less
-        than ir_size.
-    """
-    
-    # If IR is in causal form, put it in zero-phase form.
-    if causal:
-        impulse_response = torch.fftshift(impulse_response, axes=-1)
-    
-    # Get a window for better time/frequency resolution than rectangular.
-    # Window defaults to IR size, cannot be bigger.
-    ir_size = int(impulse_response.size(-1))
-    if (window_size <= 0) or (window_size > ir_size):
-        window_size = ir_size
-    window = nn.Parameter(torch.hann_window(window_size), requires_grad = False).to(impulse_response)
-    
-    # Zero pad the window and put in in zero-phase form.
-    padding = ir_size - window_size
-    if padding > 0:
-        half_idx = (window_size + 1) // 2
-        window = torch.cat([window[half_idx:],
-                            torch.zeros([padding]),
-                            window[:half_idx]], axis=0)
-    else:
-        window = window.roll(window.size(-1)//2, -1)
-        
-    # Apply the window, to get new IR (both in zero-phase form).
-    window = window.unsqueeze(0)
-    impulse_response = impulse_response * window
-    
-    # Put IR in causal form and trim zero padding.
-    if padding > 0:
-        first_half_start = (ir_size - (half_idx - 1)) + 1
-        second_half_end = half_idx + 1
-        impulse_response = torch.cat([impulse_response[..., first_half_start:],
-                                    impulse_response[..., :second_half_end]],
-                                    dim=-1)
-    else:
-        impulse_response = impulse_response.roll(impulse_response.size(-1)//2, -1)
-
-    return impulse_response
-
-
-def apply_dynamic_window_to_impulse_response(impulse_response,  # B, n_frames, 2*(n_mag-1) or 2*n_mag-1
-                                             half_width_frames):        # B，n_frames, 1
-    ir_size = int(impulse_response.size(-1)) # 2*(n_mag -1) or 2*n_mag-1
-    
-    window = torch.arange(-(ir_size // 2), (ir_size + 1) // 2).to(impulse_response) / half_width_frames 
-    window[window > 1] = 0
-    window = (1 + torch.cos(np.pi * window)) / 2 # B, n_frames, 2*(n_mag -1) or 2*n_mag-1
-    
-    impulse_response = impulse_response.roll(ir_size // 2, -1)
-    impulse_response = impulse_response * window
-    
-    return impulse_response
-    
-        
+          
 def frequency_impulse_response(magnitudes,
                                hann_window = True,
                                half_width_frames = None):
                                
     # Get the IR
     impulse_response = torch.fft.irfft(magnitudes) # B, n_frames, 2*(n_mags-1)
+    ir_size = impulse_response.size(-1)
+    impulse_response = impulse_response.roll(int(ir_size // 2), -1)
     
     # Window and put in causal form.
     if hann_window:
         if half_width_frames is None:
-            impulse_response = apply_window_to_impulse_response(impulse_response)
+            window = torch.hann_window(ir_size, device=impulse_response.device)
         else:
-            impulse_response = apply_dynamic_window_to_impulse_response(impulse_response, half_width_frames)
-    else:
-        impulse_response = impulse_response.roll(impulse_response.size(-1) // 2, -1)
+            window = torch.arange(-(ir_size // 2), (ir_size + 1) // 2, device=impulse_response.device) / half_width_frames 
+            window = torch.clamp(window, min=-1, max=1)
+            window = (1 + torch.cos(np.pi * window)) / 2 # B, n_frames, 2*(n_mag -1) or 2*n_mag-1
+        impulse_response *= window
        
     return impulse_response
 

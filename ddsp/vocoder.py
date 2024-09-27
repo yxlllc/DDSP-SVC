@@ -471,145 +471,8 @@ class DotDict(dict):
 
     __setattr__ = dict.__setitem__    
     __delattr__ = dict.__delitem__
+
     
-def load_model(
-        model_path,
-        device='cpu'):
-    config_file = os.path.join(os.path.split(model_path)[0], 'config.yaml')
-    with open(config_file, "r") as config:
-        args = yaml.safe_load(config)
-    args = DotDict(args)
-    
-    # load model
-    model = None
-
-    if args.model.type == 'Sins':
-        model = Sins(
-            sampling_rate=args.data.sampling_rate,
-            block_size=args.data.block_size,
-            n_harmonics=args.model.n_harmonics,
-            n_mag_allpass=args.model.n_mag_allpass,
-            n_mag_noise=args.model.n_mag_noise,
-            n_unit=args.data.encoder_out_channels,
-            n_spk=args.model.n_spk)
-    
-    elif args.model.type == 'CombSub':
-        model = CombSub(
-            sampling_rate=args.data.sampling_rate,
-            block_size=args.data.block_size,
-            n_mag_allpass=args.model.n_mag_allpass,
-            n_mag_harmonic=args.model.n_mag_harmonic,
-            n_mag_noise=args.model.n_mag_noise,
-            n_unit=args.data.encoder_out_channels,
-            n_spk=args.model.n_spk)
-    
-    elif args.model.type == 'CombSubFast':
-        model = CombSubFast(
-            sampling_rate=args.data.sampling_rate,
-            block_size=args.data.block_size,
-            n_unit=args.data.encoder_out_channels,
-            n_spk=args.model.n_spk)
-    
-    elif args.model.type == 'CombSubSuperFast':
-        model = CombSubSuperFast(
-            sampling_rate=args.data.sampling_rate,
-            block_size=args.data.block_size,
-            win_length=args.model.win_length,
-            n_unit=args.data.encoder_out_channels,
-            n_spk=args.model.n_spk)
-            
-    else:
-        raise ValueError(f" [x] Unknown Model: {args.model.type}")
-    
-    print(' [Loading] ' + model_path)
-    ckpt = torch.load(model_path, map_location=torch.device(device))
-    model.to(device)
-    model.load_state_dict(ckpt['model'])
-    model.eval()
-    return model, args
-
-
-class Sins(torch.nn.Module):
-    def __init__(self, 
-            sampling_rate,
-            block_size,
-            n_harmonics,
-            n_mag_allpass,
-            n_mag_noise,
-            n_unit=256,
-            n_spk=1):
-        super().__init__()
-
-        print(' [DDSP Model] Sinusoids Additive Synthesiser')
-
-        # params
-        self.register_buffer("sampling_rate", torch.tensor(sampling_rate))
-        self.register_buffer("block_size", torch.tensor(block_size))
-        # Unit2Control
-        split_map = {
-            'amplitudes': n_harmonics,
-            'group_delay': n_mag_allpass,
-            'noise_magnitude': n_mag_noise,
-        }
-        self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map)
-
-    def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, initial_phase=None, infer=True, max_upsample_dim=32):
-        '''
-            units_frames: B x n_frames x n_unit
-            f0_frames: B x n_frames x 1
-            volume_frames: B x n_frames x 1
-            spk_id: B x 1
-        '''
-        # exciter phase
-        f0 = upsample(f0_frames, self.block_size)
-        if infer:
-            x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
-        else:
-            x = torch.cumsum(f0 / self.sampling_rate, axis=1)
-        if initial_phase is not None:
-            x += initial_phase.to(x) / 2 / np.pi    
-        x = x - torch.round(x)
-        x = x.to(f0)
-        
-        phase = 2 * np.pi * x
-        phase_frames = phase[:, ::self.block_size, :]
-        
-        # parameter prediction
-        ctrls, hidden = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict)
-        
-        amplitudes_frames = torch.exp(ctrls['amplitudes'])/ 128
-        group_delay = np.pi * torch.tanh(ctrls['group_delay'])
-        noise_param = torch.exp(ctrls['noise_magnitude']) / 128
-        
-        # sinusoids exciter signal 
-        amplitudes_frames = remove_above_fmax(amplitudes_frames, f0_frames, self.sampling_rate / 2, level_start = 1)
-        n_harmonic = amplitudes_frames.shape[-1]
-        level_harmonic = torch.arange(1, n_harmonic + 1).to(phase)
-        sinusoids = 0.
-        for n in range(( n_harmonic - 1) // max_upsample_dim + 1):
-            start = n * max_upsample_dim
-            end = (n + 1) * max_upsample_dim
-            phases = phase * level_harmonic[start:end]
-            amplitudes = upsample(amplitudes_frames[:,:,start:end], self.block_size)
-            sinusoids += (torch.sin(phases) * amplitudes).sum(-1)
-        
-        # harmonic part filter (apply group-delay)
-        harmonic = frequency_filter(
-                        sinusoids,
-                        torch.exp(1.j * torch.cumsum(group_delay, axis = -1)),
-                        hann_window = False)
-                        
-        # noise part filter 
-        noise = torch.rand_like(harmonic) * 2 - 1
-        noise = frequency_filter(
-                        noise,
-                        torch.complex(noise_param, torch.zeros_like(noise_param)),
-                        hann_window = True)
-                        
-        signal = harmonic + noise
-
-        return signal, hidden, (harmonic, noise) #, (noise_param, noise_param)
-
 class CombSubSuperFast(torch.nn.Module):
     def __init__(self, 
             sampling_rate,
@@ -634,7 +497,7 @@ class CombSubSuperFast(torch.nn.Module):
             'noise_magnitude': win_length // 2 + 1,
             'noise_phase': win_length // 2 + 1
         }
-        self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map, use_pitch_aug=use_pitch_aug, use_naive_v2=True, use_conv_stack=True)
+        self.unit2ctrl = Unit2Control(n_unit, block_size, n_spk, split_map, use_pitch_aug=use_pitch_aug)
     
     def fast_source_gen(self, f0_frames):
         n = torch.arange(self.block_size, device=f0_frames.device)
@@ -647,8 +510,7 @@ class CombSubSuperFast(torch.nn.Module):
         rad += F.pad(rad_acc[:, :-1, :], (0, 0, 1, 0))
         rad -= torch.round(rad)
         combtooth = torch.sinc(rad / (s0 + 1e-5)).reshape(f0_frames.shape[0], -1)
-        phase_frames = 2 * np.pi * rad[:, :, :1]
-        return combtooth, phase_frames
+        return combtooth
         
     def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, aug_shift=None, initial_phase=None, infer=True, **kwargs):
         '''
@@ -657,11 +519,16 @@ class CombSubSuperFast(torch.nn.Module):
             volume_frames: B x n_frames x 1 
             spk_id: B x 1
         '''
-        # combtooth exciter signal 
-        combtooth, phase_frames = self.fast_source_gen(f0_frames)
+        # combtooth exciter signal
+        combtooth = self.fast_source_gen(f0_frames)
+        combtooth_frames = combtooth.unfold(1, self.block_size, self.block_size)
+        
+        # noise exciter signal
+        noise = torch.randn_like(combtooth)
+        noise_frames = noise.unfold(1, self.block_size, self.block_size)
         
         # parameter prediction
-        ctrls, hidden = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict, aug_shift=aug_shift)
+        ctrls, hidden = self.unit2ctrl(units_frames, combtooth_frames, noise_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict, aug_shift=aug_shift)
         
         src_filter = torch.exp(ctrls['harmonic_magnitude'] + 1.j * np.pi * ctrls['harmonic_phase'])
         src_filter = torch.cat((src_filter, src_filter[:,-1:,:]), 1)
@@ -684,7 +551,6 @@ class CombSubSuperFast(torch.nn.Module):
                             pad_mode = pad_mode)
         
         # noise part filter
-        noise = torch.randn_like(combtooth)
         noise_stft = torch.stft(
                             noise,
                             n_fft = self.win_length,
@@ -707,156 +573,4 @@ class CombSubSuperFast(torch.nn.Module):
                         window = self.window,
                         center = True)
 
-        return signal, hidden, (signal, signal)
-        
-class CombSubFast(torch.nn.Module):
-    def __init__(self, 
-            sampling_rate,
-            block_size,
-            n_unit=256,
-            n_spk=1,
-            use_pitch_aug=False,
-            pcmer_norm=False):
-        super().__init__()
-
-        print(' [DDSP Model] Combtooth Subtractive Synthesiser')
-        # params
-        self.register_buffer("sampling_rate", torch.tensor(sampling_rate))
-        self.register_buffer("block_size", torch.tensor(block_size))
-        self.register_buffer("window", torch.sqrt(torch.hann_window(2 * block_size)))
-        #Unit2Control
-        split_map = {
-            'harmonic_magnitude': block_size + 1, 
-            'harmonic_phase': block_size + 1,
-            'noise_magnitude': block_size + 1
-        }
-        self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map, use_pitch_aug=use_pitch_aug, pcmer_norm=pcmer_norm)
-
-    def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, aug_shift=None, initial_phase=None, infer=True, **kwargs):
-        '''
-            units_frames: B x n_frames x n_unit
-            f0_frames: B x n_frames x 1
-            volume_frames: B x n_frames x 1 
-            spk_id: B x 1
-        '''
-        # exciter phase
-        f0 = upsample(f0_frames, self.block_size)
-        if infer:
-            x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
-        else:
-            x = torch.cumsum(f0 / self.sampling_rate, axis=1)
-        if initial_phase is not None:
-            x += initial_phase.to(x) / 2 / np.pi    
-        x = x - torch.round(x)
-        x = x.to(f0)
-        
-        phase_frames = 2 * np.pi * x[:, ::self.block_size, :]
-        
-        # parameter prediction
-        ctrls, hidden = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict, aug_shift=aug_shift)
-        
-        src_filter = torch.exp(ctrls['harmonic_magnitude'] + 1.j * np.pi * ctrls['harmonic_phase'])
-        src_filter = torch.cat((src_filter, src_filter[:,-1:,:]), 1)
-        noise_filter= torch.exp(ctrls['noise_magnitude']) / 128
-        noise_filter = torch.cat((noise_filter, noise_filter[:,-1:,:]), 1)
-        
-        # combtooth exciter signal 
-        combtooth = torch.sinc(self.sampling_rate * x / (f0 + 1e-3))
-        combtooth = combtooth.squeeze(-1)     
-        combtooth_frames = F.pad(combtooth, (self.block_size, self.block_size)).unfold(1, 2 * self.block_size, self.block_size)
-        combtooth_frames = combtooth_frames * self.window
-        combtooth_fft = torch.fft.rfft(combtooth_frames, 2 * self.block_size)
-        
-        # noise exciter signal
-        noise = torch.rand_like(combtooth) * 2 - 1
-        noise_frames = F.pad(noise, (self.block_size, self.block_size)).unfold(1, 2 * self.block_size, self.block_size)
-        noise_frames = noise_frames * self.window
-        noise_fft = torch.fft.rfft(noise_frames, 2 * self.block_size)
-        
-        # apply the filters 
-        signal_fft = combtooth_fft * src_filter + noise_fft * noise_filter
-
-        # take the ifft to resynthesize audio.
-        signal_frames_out = torch.fft.irfft(signal_fft, 2 * self.block_size) * self.window
-
-        # overlap add
-        fold = torch.nn.Fold(output_size=(1, (signal_frames_out.size(1) + 1) * self.block_size), kernel_size=(1, 2 * self.block_size), stride=(1, self.block_size))
-        signal = fold(signal_frames_out.transpose(1, 2))[:, 0, 0, self.block_size : -self.block_size]
-
-        return signal, hidden, (signal, signal)
-
-class CombSub(torch.nn.Module):
-    def __init__(self, 
-            sampling_rate,
-            block_size,
-            n_mag_allpass,
-            n_mag_harmonic,
-            n_mag_noise,
-            n_unit=256,
-            n_spk=1):
-        super().__init__()
-
-        print(' [DDSP Model] Combtooth Subtractive Synthesiser (Old Version)')
-        # params
-        self.register_buffer("sampling_rate", torch.tensor(sampling_rate))
-        self.register_buffer("block_size", torch.tensor(block_size))
-        #Unit2Control
-        split_map = {
-            'group_delay': n_mag_allpass,
-            'harmonic_magnitude': n_mag_harmonic, 
-            'noise_magnitude': n_mag_noise
-        }
-        self.unit2ctrl = Unit2Control(n_unit, n_spk, split_map)
-
-    def forward(self, units_frames, f0_frames, volume_frames, spk_id=None, spk_mix_dict=None, initial_phase=None, infer=True, **kwargs):
-        '''
-            units_frames: B x n_frames x n_unit
-            f0_frames: B x n_frames x 1
-            volume_frames: B x n_frames x 1 
-            spk_id: B x 1
-        '''
-        # exciter phase
-        f0 = upsample(f0_frames, self.block_size)
-        if infer:
-            x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
-        else:
-            x = torch.cumsum(f0 / self.sampling_rate, axis=1)
-        if initial_phase is not None:
-            x += initial_phase.to(x) / 2 / np.pi    
-        x = x - torch.round(x)
-        x = x.to(f0)
-        
-        phase_frames = 2 * np.pi * x[:, ::self.block_size, :]
-        
-        # parameter prediction
-        ctrls, hidden = self.unit2ctrl(units_frames, f0_frames, phase_frames, volume_frames, spk_id=spk_id, spk_mix_dict=spk_mix_dict)
-        
-        group_delay = np.pi * torch.tanh(ctrls['group_delay'])
-        src_param = torch.exp(ctrls['harmonic_magnitude'])
-        noise_param = torch.exp(ctrls['noise_magnitude']) / 128
-        
-        # combtooth exciter signal 
-        combtooth = torch.sinc(self.sampling_rate * x / (f0 + 1e-3))
-        combtooth = combtooth.squeeze(-1)
-        
-        # harmonic part filter (using dynamic-windowed LTV-FIR, with group-delay prediction)
-        harmonic = frequency_filter(
-                        combtooth,
-                        torch.exp(1.j * torch.cumsum(group_delay, axis = -1)),
-                        hann_window = False)
-        harmonic = frequency_filter(
-                        harmonic,
-                        torch.complex(src_param, torch.zeros_like(src_param)),
-                        hann_window = True,
-                        half_width_frames = 1.5 * self.sampling_rate / (f0_frames + 1e-3))
-                  
-        # noise part filter (using constant-windowed LTV-FIR, without group-delay)
-        noise = torch.rand_like(harmonic) * 2 - 1
-        noise = frequency_filter(
-                        noise,
-                        torch.complex(noise_param, torch.zeros_like(noise_param)),
-                        hann_window = True)
-                        
-        signal = harmonic + noise
-
-        return signal, hidden, (harmonic, noise)
+        return signal, hidden

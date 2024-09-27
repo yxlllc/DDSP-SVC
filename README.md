@@ -1,160 +1,6 @@
-Language: **English** [简体中文](./cn_README.md) [한국어（outdated）](./ko_README.md)
+Language: **English** [简体中文](./cn_README.md)
 
 # DDSP-SVC
-
-## (6.0 - Experimental) New rectified-flow based model
-
-(1) Preprocessing：
-
-```bash
-python preprocess.py -c configs/reflow.yaml
-```
-
-(2) Training：
-
-```bash
-python train_reflow.py -c configs/reflow.yaml
-```
-
-(3) Non-real-time inference：
-
-```bash
-python main_reflow.py -i <input.wav> -m <model_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -step <infer_step> -method <method> -ts <t_start>
-```
-'infer_step' is the number of sampling steps for rectified-flow ODE, 'method' is 'euler' or 'rk4', 't_start' is the start time point of ODE, which needs to be larger than or equal to `t_start` in the configuration file, it is recommended to keep it equal (the default is 0.7)
-
-
-## (5.0 - Update) Improved DDSP cascade diffusion model
-
-Installing dependencies, data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) are the same as training a pure DDSP model (See section below).
-
-We provide a pre-trained model in the release page.
-
-Move the `model_0.pt` to the model export folder specified by the 'expdir' parameter in `diffusion-fast.yaml`, and the program will automatically load the pre-trained model in that folder.
-
-(1) Preprocessing：
-
-```bash
-python preprocess.py -c configs/diffusion-fast.yaml
-```
-
-(2) Train a cascade model (only train one model)：
-
-```bash
-python train_diff.py -c configs/diffusion-fast.yaml
-```
-
-(3) Non-real-time inference：
-
-```bash
-python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
-```
-
-The 5.0 version model has a built-in DDSP model, so specifying an external DDSP model using `-ddsp` is unnecessary. The other options have the same meaning as the 3.0 version model, but 'kstep' needs to be less than or equal to `k_step_max` in the configuration file, it is recommended to keep it equal (the default is 100)
-
-(4) Real-time GUI：
-
-```bash
-python gui_diff.py
-```
-
-Note: You need to load the version 5.0 model on the right hand side of the GUI
-
-## (4.0 - Update) New DDSP cascade diffusion model
-
-Installing dependencies, data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) are the same as training a pure DDSP model (See section below).
-
-We provide a pre-trained model here: <https://huggingface.co/datasets/ms903/DDSP-SVC-4.0/resolve/main/pre-trained-model/model_0.pt> (using 'contentvec768l12' encoder)
-
-Move the `model_0.pt` to the model export folder specified by the 'expdir' parameter in `diffusion-new.yaml`, and the program will automatically load the pre-trained model in that folder.
-
-(1) Preprocessing：
-
-```bash
-python preprocess.py -c configs/diffusion-new.yaml
-```
-
-(2) Train a cascade model (only train one model)：
-
-```bash
-python train_diff.py -c configs/diffusion-new.yaml
-```
-
-Note: There is a temporary problem with fp16 training, but fp32 and bf16 are working normally,
-
-(3) Non-real-time inference：
-
-```bash
-python main_diff.py -i <input.wav> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
-```
-
-The 4.0 version model has a built-in DDSP model, so specifying an external DDSP model using `-ddsp` is unnecessary. The other options have the same meaning as the 3.0 version model, but 'kstep' needs to be less than or equal to `k_step_max` in the configuration file, it is recommended to keep it equal (the default is 100)
-
-(4) Real-time GUI：
-
-```bash
-python gui_diff.py
-```
-
-Note: You need to load the version 4.0 model on the right hand side of the GUI
-
-## (3.0 - Update) Shallow diffusion model (DDSP + Diff-SVC refactor version)
-
-![Diagram](diagram.png)
-
-Installing dependencies, data preparation, configuring the pre-trained encoder (hubert or contentvec ) , pitch extractor (RMVPE) and vocoder (nsf-hifigan) are the same as training a pure DDSP model (See chapter 1 \~ 3 below).
-
-Because the diffusion model is more difficult to train, we provide some pre-trained models here:
-
-<https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/hubertsoft_fix_pitch_add_vctk_500k/model_0.pt> (using 'hubertsoft' encoder)
-
-<https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/fix_pitch_add_vctk_600k/model_0.pt> (using 'contentvec768l12' encoder)
-
-Move the `model_0.pt` to the model export folder specified by the 'expdir' parameter in `diffusion.yaml`, and the program will automatically load the pre-trained models in that folder.
-
-(1) Preprocessing：
-
-```bash
-python preprocess.py -c configs/diffusion.yaml
-```
-
-This preprocessing can also be used to train the DDSP model without preprocessing twice, but you need to ensure that the parameters under the 'data' tag in yaml files are consistent.
-
-(2) Train a diffusion model：
-
-```bash
-python train_diff.py -c configs/diffusion.yaml
-```
-
-(3) Train a DDSP model：
-
-```bash
-python train.py -c configs/combsub.yaml
-```
-
-As mentioned above, re-preprocessing is not required, but please check whether the parameters of `combsub.yaml` and `diffusion.yaml` match. The number of speakers 'n_spk' can be inconsistent, but try to use the same id to represent the same speaker (this makes inference easier).
-
-(4) Non-real-time inference：
-
-```bash
-python main_diff.py -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
-```
-
-'speedup' is the acceleration speed, 'method' is 'ddim', 'pndm', 'dpm-solver' or 'unipc', 'kstep' is the number of shallow diffusion steps, 'diffid' is the speaker id of the diffusion model, and other parameters have the same meaning as `main.py`.
-
-A reasonable 'kstep' is about 100\~300. There may be a perceived loss of sound quality when ‘speedup’ exceeds 20.
-
-If the same id has been used to represent the same speaker during training, '-diffid' can be empty, otherwise the '-diffid' option needs to be specified.
-
-If '-ddsp' is empty, the pure diffusion model is used, at this time, shallow diffusion is performed with the mel of the input source, and if further '-kstep' is empty, full-depth Gaussian diffusion is performed.
-
-The program will automatically check whether the parameters of the DDSP model and the diffusion model match (sampling rate, hop size and encoder), and if they do not match, it will ignore loading the DDSP model and enter Gaussian diffusion mode.
-
-(5) Real-time GUI：
-
-```bash
-python gui_diff.py
-```
 
 ## 0. Introduction
 
@@ -180,9 +26,7 @@ We recommend first installing PyTorch from the [official website](https://pytorc
 pip install -r requirements.txt
 ```
 
-NOTE : I only test the code using python 3.8 (windows) + torch 1.9.1 + torchaudio 0.6.0, too new or too old dependencies may not work
-
-UPDATE: python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 works, and training is faster.
+python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1
 
 ## 2. Configuring the pretrained model
 
@@ -192,7 +36,7 @@ UPDATE: python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 works,
 
 (2) Download the pre-trained [HubertSoft](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) encoder and put it under `pretrain/hubert` folder, and then modify the configuration file at the same time.
 
-- Vocoder or enhancer:
+- Vocoder:
 
 Download and unzip the pre-trained [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-44.1k-hop512-128bin-2024.02/nsf_hifigan_44.1k_hop512_128bin_2024.02.zip) vocoder 
 
@@ -216,33 +60,23 @@ python draw.py
 
 to help you select validation data (you can adjust the parameters in `draw.py` to modify the number of extracted files and other parameters)
 
-Then run
+Then run the preprocessor:
 
 ```bash
-python preprocess.py -c configs/combsub.yaml
+python preprocess.py -c configs/reflow.yaml
 ```
 
-for a model of combtooth substractive synthesiser (**recommend**), or run
+NOTE 1: The default configuration is suitable for with GTX-1660 graphics card.
 
-```bash
-python preprocess.py -c configs/sins.yaml
-```
+NOTE 2: Please keep the sampling rate of all audio clips consistent with the sampling rate in the yaml configuration file ! If it is not consistent, the program can be executed safely, but the resampling during the training process will be very slow.
 
-for a model of sinusoids additive synthesiser.
+NOTE 3: The total number of the audio clips for training dataset is recommended to be about 1000, especially long audio clip can be cut into short segments, which will speed up the training, but the duration of all audio clips should not be less than 2 seconds. If there are too many audio clips, you need a large internal-memory or set the 'cache_all_data' option to false in the configuration file.
 
-For training the diffusion model, see section 3.0, 4.0 or 5.0 above.
+NOTE 4: The total number of the audio clips for validation dataset is recommended to be about 10, please don't put too many or it will be very slow to do the validation.
 
-You can modify the configuration file `config/<model_name>.yaml` before preprocessing. The default configuration is suitable for training 44.1khz high sampling rate synthesiser with GTX-1660 graphics card.
+NOTE 5: If your dataset is not very high quality, set 'f0_extractor' to 'rmvpe' in the config file.
 
-NOTE 1: Please keep the sampling rate of all audio clips consistent with the sampling rate in the yaml configuration file ! If it is not consistent, the program can be executed safely, but the resampling during the training process will be very slow.
-
-NOTE 2: The total number of the audio clips for training dataset is recommended to be about 1000, especially long audio clip can be cut into short segments, which will speed up the training, but the duration of all audio clips should not be less than 2 seconds. If there are too many audio clips, you need a large internal-memory or set the 'cache_all_data' option to false in the configuration file.
-
-NOTE 3: The total number of the audio clips for validation dataset is recommended to be about 10, please don't put too many or it will be very slow to do the validation.
-
-NOTE 4: If your dataset is not very high quality, set 'f0_extractor' to 'rmvpe' in the config file.
-
-NOTE 5: Multi-speaker training is supported now. The 'n_spk' parameter in configuration file controls whether it is a multi-speaker model. If you want to train a **multi-speaker** model, audio folders need to be named with **positive integers not greater than 'n_spk'** to represent speaker ids, the directory structure is like below:
+NOTE 6: Multi-speaker training is supported now. The 'n_spk' parameter in configuration file controls whether it is a multi-speaker model. If you want to train a **multi-speaker** model, audio folders need to be named with **positive integers not greater than 'n_spk'** to represent speaker ids, the directory structure is like below:
 
 ```bash
 # training dataset
@@ -283,10 +117,10 @@ data/val/audio/ddd.wav
 
 ```bash
 # train a combsub model as an example
-python train.py -c configs/combsub.yaml
+python train_reflow.py -c configs/reflow.yaml
 ```
 
-The command line for training other models is similar.
+After training starts, a weight is temporarily saved every ‘interval_val’ step, and a weight is permanently saved every ‘interval_force_save’ step. These two configuration items can be modified according to the situation.
 
 You can safely interrupt training, then running the same command line will resume training.
 
@@ -301,36 +135,26 @@ tensorboard --logdir=exp
 
 Test audio samples will be visible in TensorBoard after the first validation.
 
-NOTE: The test audio samples in Tensorboard are the original outputs of your DDSP-SVC model that is not enhanced by an enhancer. If you want to test the synthetic effect after using the enhancer (which may have higher quality) , please use the method described in the following chapter.
 
 ## 6. Non-real-time VC
 
-(**Recommend**) Enhance the output using the pretrained vocoder-based enhancer:
-
 ```bash
-# high audio quality in the normal vocal range if enhancer_adaptive_key = 0 (default)
-# set enhancer_adaptive_key > 0 to adapt the enhancer to a higher vocal range
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -eak <enhancer_adaptive_key (semitones)>
+python main_reflow.py -i <input.wav> -m <model_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -step <infer_step> -method <method> -ts <t_start>
 ```
 
-Raw output of DDSP:
+'infer_step' is the number of sampling steps for rectified-flow ODE, 'method' is 'euler' or 'rk4', 't_start' is the start time point of ODE, which needs to be larger than or equal to t_start in the configuration file, it is recommended to keep it equal (the default is 0.7).
+
+You can use "-mix" option to design your own vocal timbre, below is an example:
 
 ```bash
-# fast, but relatively low audio quality (like you hear in tensorboard)
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -e false
+# Mix the timbre of 1st and 2nd speaker in a 0.5 to 0.5 ratio
+python main_reflow.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -eak 0
 ```
 
 Other options about the f0 extractor and response threhold，see:
 
 ```bash
-python main.py -h
-```
-
-(UPDATE) Mix-speaker is supported now. You can use "-mix" option to design your own vocal timbre, below is an example:
-
-```bash
-# Mix the timbre of 1st and 2nd speaker in a 0.5 to 0.5 ratio
-python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -eak 0
+python main_reflow.py -h
 ```
 
 ## 7. Real-time VC
@@ -338,12 +162,10 @@ python main.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (
 Start a simple GUI with the following command:
 
 ```bash
-python gui.py
+python gui_reflow.py
 ```
 
 The front-end uses technologies such as sliding window, cross-fading, SOLA-based splicing and contextual semantic reference, which can achieve sound quality close to non-real-time synthesis with low latency and resource occupation.
-
-Update: A splicing algorithm based on a phase vocoder is now added, but in most cases the SOLA algorithm already has high enough splicing sound quality, so it is turned off by default. If you are pursuing extreme low-latency real-time sound quality, you can consider turning it on and tuning the parameters carefully, and there is a possibility that the sound quality will be higher. However, a large number of tests have found that if the cross-fade time is longer than 0.1 seconds, the phase vocoder will cause a significant degradation in sound quality.
 
 ## 8. Acknowledgement
 

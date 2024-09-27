@@ -11,9 +11,9 @@ import parselmouth
 import hashlib
 from ast import literal_eval
 from slicer import Slicer
-from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
+from ddsp.vocoder import F0_Extractor, Volume_Extractor, Units_Encoder
 from ddsp.core import upsample
-from diffusion.vocoder import load_model_vocoder
+from reflow.vocoder import load_model_vocoder
 from tqdm import tqdm
 
 
@@ -85,19 +85,11 @@ def parse_args(args=None, namespace=None):
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-diff",
-        "--diff_ckpt",
+        "-m",
+        "--model_ckpt",
         type=str,
         required=True,
-        help="path to the diffusion model checkpoint",
-    )
-    parser.add_argument(
-        "-ddsp",
-        "--ddsp_ckpt",
-        type=str,
-        required=False,
-        default=None,
-        help="path to the DDSP model checkpoint (for shallow diffusion)",
+        help="path to the model checkpoint",
     )
     parser.add_argument(
         "-d",
@@ -185,20 +177,12 @@ def parse_args(args=None, namespace=None):
         help="response threhold (dB) | default: -60",
     )
     parser.add_argument(
-        "-diffid",
-        "--diff_spk_id",
+        "-step",
+        "--infer_step",
         type=str,
         required=False,
         default='auto',
-        help="diffusion speaker id (for multi-speaker model) | default: auto",
-    )
-    parser.add_argument(
-        "-speedup",
-        "--speedup",
-        type=str,
-        required=False,
-        default='auto',
-        help="speed up | default: auto",
+        help="sample steps | default: auto",
     )
     parser.add_argument(
         "-method",
@@ -206,15 +190,15 @@ def parse_args(args=None, namespace=None):
         type=str,
         required=False,
         default='auto',
-        help="ddim, pndm, dpm-solver or unipc | default: auto",
+        help="euler or rk4 | default: auto",
     )
     parser.add_argument(
-        "-kstep",
-        "--k_step",
+        "-ts",
+        "--t_start",
         type=str,
         required=False,
-        default=None,
-        help="shallow diffusion steps | default: None",
+        default=0.0,
+        help="t_start | default: auto",
     )
     parser.add_argument(
         "-e",
@@ -228,7 +212,7 @@ def parse_args(args=None, namespace=None):
     return parser.parse_args(args=args, namespace=namespace)
 
 
-def infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, units_encoder):
+def infer(input_path, output_path, cmd, device, model, vocoder, args, units_encoder):
     # load input
     audio, sample_rate = librosa.load(input_path, sr=None)
     if len(audio.shape) > 1:
@@ -292,73 +276,56 @@ def infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, unit
     # speaker id or mix-speaker dictionary
     spk_mix_dict = literal_eval(cmd.spk_mix_dict)
     spk_id = torch.LongTensor(np.array([[int(cmd.spk_id)]])).to(device)
-    if cmd.diff_spk_id == 'auto':
-        diff_spk_id = spk_id
-    else:
-        diff_spk_id = torch.LongTensor(np.array([[int(cmd.diff_spk_id)]])).to(device)
     if spk_mix_dict is not None:
         print('Mix-speaker mode')
     else:
-        print('DDSP Speaker ID: '+ str(int(cmd.spk_id)))
-        print('Diffusion Speaker ID: '+ str(cmd.diff_spk_id))
-
-    # speed up
-    if cmd.speedup == 'auto':
-        infer_speedup = args.infer.speedup
-    else:
-        infer_speedup = int(cmd.speedup)
+        print('Speaker ID: '+ str(int(cmd.spk_id)))
+    
+    # sampling method    
     if cmd.method == 'auto':
         method = args.infer.method
     else:
         method = cmd.method
-    if infer_speedup > 1:
+        
+    # infer step
+    if cmd.infer_step == 'auto':
+        infer_step = args.infer.infer_step
+    else:
+        infer_step = int(cmd.infer_step)
+    
+    # t_start
+    if cmd.t_start == 'auto':
+        if args.model.t_start is not None:
+            t_start = float(args.model.t_start)
+        else:
+            t_start = 0.0
+    else:
+        t_start = float(cmd.t_start)
+        if args.model.t_start is not None and t_start < args.model.t_start:
+            t_start = args.model.t_start
+            
+    if infer_step > 0:
         print('Sampling method: '+ method)
-        print('Speed up: '+ str(infer_speedup))
-    else:
-        print('Sampling method: DDPM')
-
-    input_mel = None
-    k_step = None
-    if args.model.type == 'DiffusionNew' or args.model.type == 'DiffusionFast':
-        if cmd.k_step is not None:
-            k_step = int(cmd.k_step)
-            if k_step > args.model.k_step_max:
-                k_step = args.model.k_step_max
-        else:
-            k_step = args.model.k_step_max
-        print('Shallow diffusion step: ' + str(k_step))
-    else:
-        if cmd.k_step is not None:
-            k_step = int(cmd.k_step)
-            print('Shallow diffusion step: ' + str(k_step))
-            if ddsp is None:
-                print('DDSP model is not identified!')
-                print('Extracting the mel spectrum of the input audio for shallow diffusion...')
-                audio_t = torch.from_numpy(audio).float().unsqueeze(0).to(device)
-                input_mel = vocoder.extract(audio_t, sample_rate)
-                input_mel = torch.cat((input_mel, input_mel[:, -1:, :]), 1)
-        else:
-            print('Shallow diffusion step is not identified, gaussian diffusion will be used!')
+        print('infer step: '+ str(infer_step))
+        print('t_start: '+ str(t_start))
+    elif infer_step < 0:
+        print('infer step cannot be negative!')
+        exit(0)
 
     with torch.no_grad():
-        if ddsp is not None:
-            ddsp_f0 = 2 ** (-float(cmd.formant_shift_key) / 12) * f0
-            ddsp_output, _, (_, _) = ddsp(units, ddsp_f0, volume, spk_id=spk_id, spk_mix_dict=spk_mix_dict)
-            input_mel = vocoder.extract(ddsp_output, args.data.sampling_rate, keyshift=float(cmd.formant_shift_key))
-        mel = model(
+        output = model(
             units,
             f0,
             volume,
-            spk_id=diff_spk_id,
+            spk_id=spk_id,
             spk_mix_dict=spk_mix_dict,
             aug_shift=formant_shift_key,
             vocoder=vocoder,
-            gt_spec=input_mel[:, :units.size(1)] if input_mel is not None else None,
             infer=True,
-            infer_speedup=infer_speedup,
+            return_wav=True,
+            infer_step=infer_step, 
             method=method,
-            k_step=k_step)
-        output = vocoder.infer(mel, f0)
+            t_start=t_start)
         output *= mask
         output = output.squeeze().cpu().numpy()
         sf.write(output_path, output, args.data.sampling_rate)
@@ -375,27 +342,8 @@ if __name__ == '__main__':
 
     extensions = cmd.extensions
 
-    # load diffusion model
-    model, vocoder, args = load_model_vocoder(cmd.diff_ckpt, device=device)
-
-    ddsp = None
-    if args.model.type == 'DiffusionNew':
-        if cmd.ddsp_ckpt is not None:
-            # load ddsp model
-            ddsp, ddsp_args = load_model(cmd.ddsp_ckpt, device=device)
-            if not check_args(ddsp_args, args):
-                print("Cannot use this DDSP model for shallow diffusion, the built-in DDSP model will be used!")
-                ddsp = None
-        else:
-            print("DDSP model is not identified, the built-in DDSP model will be used!")
-
-    else:
-        if cmd.k_step is not None and cmd.ddsp_ckpt is not None:
-            # load ddsp model
-            ddsp, ddsp_args = load_model(cmd.ddsp_ckpt, device=device)
-            if not check_args(ddsp_args, args):
-                print("Cannot use this DDSP model for shallow diffusion, gaussian diffusion will be used!")
-                ddsp = None
+    # load reflow model
+    model, vocoder, args = load_model_vocoder(cmd.model_ckpt, device=device)
 
     # load units encoder
     if args.data.encoder == 'cnhubertsoftfish':
@@ -421,4 +369,4 @@ if __name__ == '__main__':
         output_path = (pathlib.Path(cmd.output) / rel_path).with_suffix('.wav')
         print('_______________________________')
         print('Input: ' + str(input_path))
-        infer(input_path, output_path, cmd, device, model, vocoder, args, ddsp, units_encoder)
+        infer(input_path, output_path, cmd, device, model, vocoder, args, units_encoder)

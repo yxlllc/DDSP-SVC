@@ -9,7 +9,7 @@ import parselmouth
 import hashlib
 from ast import literal_eval
 from slicer import Slicer
-from ddsp.vocoder import load_model, F0_Extractor, Volume_Extractor, Units_Encoder
+from ddsp.vocoder import F0_Extractor, Volume_Extractor, Units_Encoder
 from ddsp.core import upsample
 from reflow.vocoder import load_model_vocoder
 from tqdm import tqdm

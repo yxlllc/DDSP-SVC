@@ -8,7 +8,7 @@ from nsf_hifigan.nvSTFT import STFT
 from nsf_hifigan.models import load_model,load_config
 from torchaudio.transforms import Resample
 from .reflow import RectifiedFlow
-from .naive_v2_diff import NaiveV2Diff
+from .lynxnet import LYNXNet
 from ddsp.vocoder import CombSubSuperFast
 
 class DotDict(dict):
@@ -162,7 +162,7 @@ class Unit2Wav(nn.Module):
         self.sampling_rate = sampling_rate
         self.block_size = block_size
         self.ddsp_model = CombSubSuperFast(sampling_rate, block_size, win_length, n_unit, n_spk, use_pitch_aug)
-        self.reflow_model = RectifiedFlow(NaiveV2Diff(mel_channels=out_dims, dim=n_chans, num_layers=n_layers, condition_dim=out_dims, use_mlp=False), out_dims=out_dims)
+        self.reflow_model = RectifiedFlow(LYNXNet(in_dims=out_dims, dim_cond=out_dims, n_layers=n_layers, n_chans=n_chans), out_dims=out_dims)
 
     def forward(self, units, f0, volume, spk_id=None, spk_mix_dict=None, aug_shift=None, vocoder=None,
                 gt_spec=None, infer=True, return_wav=False, infer_step=10, method='euler', t_start=0.0, 
@@ -174,7 +174,7 @@ class Unit2Wav(nn.Module):
         return: 
             dict of B x n_frames x feat
         '''
-        ddsp_wav, hidden, (_, _) = self.ddsp_model(units, f0, volume, spk_id=spk_id, spk_mix_dict=spk_mix_dict, aug_shift=aug_shift, infer=infer)
+        ddsp_wav, hidden = self.ddsp_model(units, f0, volume, spk_id=spk_id, spk_mix_dict=spk_mix_dict, aug_shift=aug_shift, infer=infer)
         start_frame = int(silence_front * self.sampling_rate / self.block_size)
         if vocoder is not None:
             ddsp_mel = vocoder.extract(ddsp_wav[:, start_frame * self.block_size:])
