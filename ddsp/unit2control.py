@@ -27,6 +27,7 @@ class Unit2Control(nn.Module):
             block_size,
             n_spk,
             output_splits,
+            use_attention=False,
             use_pitch_aug=False):
         super().__init__()
         self.output_splits = output_splits
@@ -49,22 +50,17 @@ class Unit2Control(nn.Module):
                 weight_norm(nn.Conv1d(2 * block_size, 512, 3, 1, 1)),
                 nn.PReLU(num_parameters=512),
                 weight_norm(nn.Conv1d(512, 256, 3, 1, 1)))
-        
         self.decoder = ConformerNaiveEncoder(
                 num_layers=3,
                 num_heads=8,
                 dim_model=256,
                 use_norm=False,
-                conv_only=True,
+                conv_only=not use_attention,
                 conv_dropout=0,
                 atten_dropout=0.1)
-
         self.norm = nn.LayerNorm(256)
-
-        # out
         self.n_out = sum([v for k, v in output_splits.items()])
-        self.dense_out = weight_norm(
-            nn.Linear(256, self.n_out))
+        self.dense_out = weight_norm(nn.Linear(256, self.n_out))
 
     def forward(self, units, source, noise, volume, spk_id = None, spk_mix_dict = None, aug_shift = None):
         

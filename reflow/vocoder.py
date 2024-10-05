@@ -39,6 +39,7 @@ def load_model_vocoder(
                     args.model.win_length,
                     args.data.encoder_out_channels, 
                     args.model.n_spk,
+                    args.model.use_attention,
                     args.model.use_pitch_aug,
                     vocoder.dimension,
                     args.model.n_layers,
@@ -154,6 +155,7 @@ class Unit2Wav(nn.Module):
             win_length,
             n_unit,
             n_spk,
+            use_attention=False,
             use_pitch_aug=False,
             out_dims=128,
             n_layers=6, 
@@ -161,7 +163,7 @@ class Unit2Wav(nn.Module):
         super().__init__()
         self.sampling_rate = sampling_rate
         self.block_size = block_size
-        self.ddsp_model = CombSubSuperFast(sampling_rate, block_size, win_length, n_unit, n_spk, use_pitch_aug)
+        self.ddsp_model = CombSubSuperFast(sampling_rate, block_size, win_length, n_unit, n_spk, use_attention, use_pitch_aug)
         self.reflow_model = RectifiedFlow(LYNXNet(in_dims=out_dims, dim_cond=out_dims, n_layers=n_layers, n_chans=n_chans), out_dims=out_dims)
 
     def forward(self, units, f0, volume, spk_id=None, spk_mix_dict=None, aug_shift=None, vocoder=None,

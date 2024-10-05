@@ -40,6 +40,7 @@ if __name__ == '__main__':
                     args.model.win_length,
                     args.data.encoder_out_channels, 
                     args.model.n_spk,
+                    args.model.use_attention,
                     args.model.use_pitch_aug,
                     vocoder.dimension,
                     args.model.n_layers,
