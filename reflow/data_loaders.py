@@ -8,6 +8,18 @@ import random
 from tqdm import tqdm
 from torch.utils.data import Dataset
 
+
+def get_npy_shape(file_path):
+    with open(file_path, "rb") as f:
+        version = np.lib.format.read_magic(f)
+        if version == (1, 0):
+            shape = np.lib.format.read_array_header_1_0(f)[0]
+        elif version == (2, 0):
+            shape = np.lib.format.read_array_header_2_0(f)[0]
+        else:
+            raise ValueError("Unsupported .npy file version")
+    return shape
+        
 def traverse_dir(
         root_dir,
         extensions,
@@ -106,9 +118,9 @@ class AudioDataset(Dataset):
     ):
         super().__init__()
         
-        self.waveform_sec = waveform_sec
         self.sample_rate = sample_rate
         self.hop_size = hop_size
+        self.crop_len = int(waveform_sec * sample_rate / hop_size)
         self.path_root = path_root
         self.paths = traverse_dir(
             os.path.join(path_root, 'audio'),
@@ -127,19 +139,20 @@ class AudioDataset(Dataset):
             print('Load the f0, volume data from :', path_root)
         for name_ext in tqdm(self.paths, total=len(self.paths)):
             name = os.path.splitext(name_ext)[0]
-            path_audio = os.path.join(self.path_root, 'audio', name_ext)
-            duration = librosa.get_duration(filename = path_audio, sr = self.sample_rate)
             
             path_f0 = os.path.join(self.path_root, 'f0', name_ext) + '.npy'
             f0 = np.load(path_f0)
+            f0_len = len(f0)
             f0 = torch.from_numpy(f0).float().unsqueeze(-1).to(device)
                 
             path_volume = os.path.join(self.path_root, 'volume', name_ext) + '.npy'
             volume = np.load(path_volume)
+            volume_len = len(volume)
             volume = torch.from_numpy(volume).float().unsqueeze(-1).to(device)
             
             path_augvol = os.path.join(self.path_root, 'aug_vol', name_ext) + '.npy'
             aug_vol = np.load(path_augvol)
+            aug_vol_len = len(aug_vol)
             aug_vol = torch.from_numpy(aug_vol).float().unsqueeze(-1).to(device)
                         
             if n_spk is not None and n_spk > 1:
@@ -150,23 +163,23 @@ class AudioDataset(Dataset):
             else:
                 spk_id = 1
             spk_id = torch.LongTensor(np.array([spk_id])).to(device)
-
+            
+            path_mel = os.path.join(self.path_root, 'mel', name_ext) + '.npy'
+            path_augmel = os.path.join(self.path_root, 'aug_mel', name_ext) + '.npy'
+            path_units = os.path.join(self.path_root, 'units', name_ext) + '.npy'
+            
+            mel_len = get_npy_shape(path_mel)[0]
+            aug_mel_len = get_npy_shape(path_augmel)[0]
+            units_len = get_npy_shape(path_units)[0]
+            frame_len = min(mel_len, aug_mel_len, units_len, f0_len, volume_len, aug_vol_len)
+            
             if load_all_data:
-                '''
-                audio, sr = librosa.load(path_audio, sr=self.sample_rate)
-                if len(audio.shape) > 1:
-                    audio = librosa.to_mono(audio)
-                audio = torch.from_numpy(audio).to(device)
-                '''
-                path_mel = os.path.join(self.path_root, 'mel', name_ext) + '.npy'
                 mel = np.load(path_mel)
                 mel = torch.from_numpy(mel).to(device)
                 
-                path_augmel = os.path.join(self.path_root, 'aug_mel', name_ext) + '.npy'
                 aug_mel = np.load(path_augmel)
                 aug_mel = torch.from_numpy(aug_mel).to(device)
                 
-                path_units = os.path.join(self.path_root, 'units', name_ext) + '.npy'
                 units = np.load(path_units)
                 units = torch.from_numpy(units).to(device)
                 
@@ -176,7 +189,7 @@ class AudioDataset(Dataset):
                     units = units.half()
                     
                 self.data_buffer[name_ext] = {
-                        'duration': duration,
+                        'frame_len': frame_len,
                         'mel': mel,
                         'aug_mel': aug_mel,
                         'units': units,
@@ -187,7 +200,7 @@ class AudioDataset(Dataset):
                         }
             else:
                 self.data_buffer[name_ext] = {
-                        'duration': duration,
+                        'frame_len': frame_len,
                         'f0': f0,
                         'volume': volume,
                         'aug_vol': aug_vol,
@@ -199,7 +212,7 @@ class AudioDataset(Dataset):
         name_ext = self.paths[file_idx]
         data_buffer = self.data_buffer[name_ext]
         # check duration. if too short, then skip
-        if data_buffer['duration'] < (self.waveform_sec + 0.1):
+        if data_buffer['frame_len'] < self.crop_len:
             return self.__getitem__( (file_idx + 1) % len(self.paths))
             
         # get item
@@ -207,32 +220,10 @@ class AudioDataset(Dataset):
 
     def get_data(self, name_ext, data_buffer):
         name = os.path.splitext(name_ext)[0]
-        frame_resolution = self.hop_size / self.sample_rate
-        duration = data_buffer['duration']
-        waveform_sec = duration if self.whole_audio else self.waveform_sec
-        
-        # load audio
-        idx_from = 0 if self.whole_audio else random.uniform(0, duration - waveform_sec - 0.1)
-        start_frame = int(idx_from / frame_resolution)
-        units_frame_len = int(waveform_sec / frame_resolution)
+        start_frame = 0 if self.whole_audio else random.randint(0, data_buffer['frame_len'] - self.crop_len)
+        units_frame_len = data_buffer['frame_len'] if self.whole_audio else self.crop_len
         aug_flag = random.choice([True, False]) and self.use_aug
-        '''
-        audio = data_buffer.get('audio')
-        if audio is None:
-            path_audio = os.path.join(self.path_root, 'audio', name) + '.wav'
-            audio, sr = librosa.load(
-                    path_audio, 
-                    sr = self.sample_rate, 
-                    offset = start_frame * frame_resolution,
-                    duration = waveform_sec)
-            if len(audio.shape) > 1:
-                audio = librosa.to_mono(audio)
-            # clip audio into N seconds
-            audio = audio[ : audio.shape[-1] // self.hop_size * self.hop_size]       
-            audio = torch.from_numpy(audio).float()
-        else:
-            audio = audio[start_frame * self.hop_size : (start_frame + units_frame_len) * self.hop_size]
-        '''
+
         # load mel
         mel_key = 'aug_mel' if aug_flag else 'mel'
         mel = data_buffer.get(mel_key)
