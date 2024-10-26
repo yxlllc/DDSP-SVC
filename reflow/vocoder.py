@@ -42,6 +42,8 @@ def load_model_vocoder(
                     args.model.use_attention,
                     args.model.use_pitch_aug,
                     vocoder.dimension,
+                    args.model.n_aux_layers,
+                    args.model.n_aux_chans,
                     args.model.n_layers,
                     args.model.n_chans)
                    
@@ -158,12 +160,23 @@ class Unit2Wav(nn.Module):
             use_attention=False,
             use_pitch_aug=False,
             out_dims=128,
+            n_aux_layers=3,
+            n_aux_chans=256,
             n_layers=6, 
             n_chans=512):
         super().__init__()
         self.sampling_rate = sampling_rate
         self.block_size = block_size
-        self.ddsp_model = CombSubSuperFast(sampling_rate, block_size, win_length, n_unit, n_spk, use_attention, use_pitch_aug)
+        self.ddsp_model = CombSubSuperFast(
+                            sampling_rate, 
+                            block_size, 
+                            win_length, 
+                            n_unit, 
+                            n_spk, 
+                            n_aux_layers if n_aux_layers is not None else 3,
+                            n_aux_chans if n_aux_chans is not None else 256,
+                            use_attention, 
+                            use_pitch_aug)
         self.reflow_model = RectifiedFlow(LYNXNet(in_dims=out_dims, dim_cond=out_dims, n_layers=n_layers, n_chans=n_chans), out_dims=out_dims)
 
     def forward(self, units, f0, volume, spk_id=None, spk_mix_dict=None, aug_shift=None, vocoder=None,
@@ -185,7 +198,10 @@ class Unit2Wav(nn.Module):
             
         if not infer:
             ddsp_loss = F.mse_loss(ddsp_mel, gt_spec)
-            reflow_loss = self.reflow_model(ddsp_mel, gt_spec=gt_spec, t_start=t_start, infer=False)
+            if t_start < 1.0:
+                reflow_loss = self.reflow_model(ddsp_mel, gt_spec=gt_spec, t_start=t_start, infer=False)
+            else:
+                reflow_loss = torch.tensor(0)
             return ddsp_loss, reflow_loss
         else:
             if gt_spec is not None and ddsp_mel is None:

@@ -43,6 +43,8 @@ if __name__ == '__main__':
                     args.model.use_attention,
                     args.model.use_pitch_aug,
                     vocoder.dimension,
+                    args.model.n_aux_layers,
+                    args.model.n_aux_chans,
                     args.model.n_layers,
                     args.model.n_chans) 
                     

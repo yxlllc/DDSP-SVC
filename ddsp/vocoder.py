@@ -480,9 +480,10 @@ class CombSubSuperFast(torch.nn.Module):
             win_length,
             n_unit=256,
             n_spk=1,
+            num_layers=3,
+            dim_model=256,
             use_attention=False,
-            use_pitch_aug=False,
-            pcmer_norm=False):
+            use_pitch_aug=False):
         super().__init__()
 
         print(' [DDSP Model] Combtooth Subtractive Synthesiser')
@@ -498,7 +499,15 @@ class CombSubSuperFast(torch.nn.Module):
             'noise_magnitude': win_length // 2 + 1,
             'noise_phase': win_length // 2 + 1
         }
-        self.unit2ctrl = Unit2Control(n_unit, block_size, n_spk, split_map, use_attention=use_attention, use_pitch_aug=use_pitch_aug)
+        self.unit2ctrl = Unit2Control(
+                            n_unit, 
+                            block_size, 
+                            n_spk, 
+                            split_map,
+                            num_layers=num_layers,
+                            dim_model=dim_model,
+                            use_attention=use_attention, 
+                            use_pitch_aug=use_pitch_aug)
     
     def fast_source_gen(self, f0_frames):
         n = torch.arange(self.block_size, device=f0_frames.device)
