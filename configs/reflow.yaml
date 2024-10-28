@@ -23,6 +23,7 @@ model:
   n_layers: 6
   n_chans: 512
   t_start: 0.7
+  use_norm: false
   use_attention: false
   use_pitch_aug: true 
   n_spk: 1 # max number of different speakers

@@ -39,6 +39,7 @@ def load_model_vocoder(
                     args.model.win_length,
                     args.data.encoder_out_channels, 
                     args.model.n_spk,
+                    args.model.use_norm,
                     args.model.use_attention,
                     args.model.use_pitch_aug,
                     vocoder.dimension,
@@ -157,6 +158,7 @@ class Unit2Wav(nn.Module):
             win_length,
             n_unit,
             n_spk,
+            use_norm=False,
             use_attention=False,
             use_pitch_aug=False,
             out_dims=128,
@@ -175,6 +177,7 @@ class Unit2Wav(nn.Module):
                             n_spk, 
                             n_aux_layers if n_aux_layers is not None else 3,
                             n_aux_chans if n_aux_chans is not None else 256,
+                            use_norm,
                             use_attention, 
                             use_pitch_aug)
         self.reflow_model = RectifiedFlow(LYNXNet(in_dims=out_dims, dim_cond=out_dims, n_layers=n_layers, n_chans=n_chans), out_dims=out_dims)

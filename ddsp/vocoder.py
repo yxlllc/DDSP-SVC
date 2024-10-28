@@ -482,6 +482,7 @@ class CombSubSuperFast(torch.nn.Module):
             n_spk=1,
             num_layers=3,
             dim_model=256,
+            use_norm=False,
             use_attention=False,
             use_pitch_aug=False):
         super().__init__()
@@ -506,6 +507,7 @@ class CombSubSuperFast(torch.nn.Module):
                             split_map,
                             num_layers=num_layers,
                             dim_model=dim_model,
+                            use_norm=use_norm,
                             use_attention=use_attention, 
                             use_pitch_aug=use_pitch_aug)
     

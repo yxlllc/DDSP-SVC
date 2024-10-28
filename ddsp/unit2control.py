@@ -29,6 +29,7 @@ class Unit2Control(nn.Module):
             output_splits,
             num_layers=3,
             dim_model=256,
+            use_norm=False,
             use_attention=False,
             use_pitch_aug=False):
         super().__init__()
@@ -56,7 +57,7 @@ class Unit2Control(nn.Module):
                 num_layers=num_layers,
                 num_heads=8,
                 dim_model=dim_model,
-                use_norm=False,
+                use_norm=use_norm,
                 conv_only=not use_attention,
                 conv_dropout=0,
                 atten_dropout=0.1)
