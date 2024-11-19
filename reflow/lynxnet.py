@@ -9,6 +9,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class Conv1d(torch.nn.Conv1d):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        nn.init.kaiming_normal_(self.weight)
+
+
 class SwiGLU(nn.Module):
     ## Swish-Applies the gated linear unit function.
     def __init__(self, dim=-1):
@@ -113,7 +119,7 @@ class LYNXNet(nn.Module):
             - 'ReLU' : Contrary to 'SiLU', Voice will be weakened
         """
         super().__init__()
-        self.input_projection = nn.Conv1d(in_dims * n_feats, n_chans, 1)
+        self.input_projection = Conv1d(in_dims * n_feats, n_chans, 1)
         self.diffusion_embedding = nn.Sequential(
             SinusoidalPosEmb(n_chans),
             nn.Linear(n_chans, n_chans * 4),
@@ -135,7 +141,7 @@ class LYNXNet(nn.Module):
             ]
         )
         self.norm = nn.LayerNorm(n_chans)
-        self.output_projection = nn.Conv1d(n_chans, in_dims * n_feats, kernel_size=1)
+        self.output_projection = Conv1d(n_chans, in_dims * n_feats, kernel_size=1)
         nn.init.zeros_(self.output_projection.weight)
     
     def forward(self, spec, diffusion_step, cond):
