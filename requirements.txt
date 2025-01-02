@@ -4,7 +4,7 @@ gin
 gin_config
 librosa
 matplotlib
-numpy
+numpy==1.26.4
 praat-parselmouth
 pyworld
 PyYAML
