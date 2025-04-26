@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from torch.nn.utils import weight_norm
 from reflow.reflow import RectifiedFlow
-from reflow.lynxnet import LYNXNet
+from reflow.lynxnet2 import LYNXNet2
 from ddsp.model_conformer_naive import ConformerNaiveEncoder
 from onnxruntime import InferenceSession
 from nsf_hifigan.nvSTFT import STFT

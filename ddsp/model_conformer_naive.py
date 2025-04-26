@@ -106,7 +106,7 @@ class CFNEncoderLayer(nn.Module):
         if self.attn is not None:
             x = x + (self.attn(self.norm(x), mask))
 
-        x = x + (self.conformer(x))
+        x = x + self.conformer(x)
 
         return x  # (#batch, length, dim_model)
 
@@ -115,7 +115,7 @@ class ConformerConvModule(nn.Module):
     def __init__(
             self,
             dim,
-            expansion_factor=2,
+            expansion_factor=1,
             kernel_size=31,
             dropout=0.,
             use_norm=False,
@@ -124,18 +124,18 @@ class ConformerConvModule(nn.Module):
         super().__init__()
 
         inner_dim = dim * expansion_factor
-        padding = calc_same_padding(kernel_size)
 
         if conv_model_type == 'mode1':
             self.net = nn.Sequential(
                 nn.LayerNorm(dim) if use_norm else nn.Identity(),
                 Transpose((1, 2)),
-                nn.Conv1d(dim, inner_dim * 2, 1),
-                SwiGLU(dim=1),
-                nn.Conv1d(inner_dim, inner_dim, kernel_size=kernel_size, padding=padding[0], groups=inner_dim),
-                nn.PReLU(num_parameters=inner_dim),
-                nn.Conv1d(inner_dim, dim, 1),
+                nn.Conv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size // 2, groups=dim),
                 Transpose((1, 2)),
+                nn.Linear(dim, inner_dim * 2),
+                SwiGLU(),
+                nn.Linear(inner_dim, inner_dim * 2),
+                SwiGLU(),
+                nn.Linear(inner_dim, dim),
                 nn.Dropout(dropout)
             )
         elif conv_model_type == 'mode2':
@@ -145,11 +145,6 @@ class ConformerConvModule(nn.Module):
 
     def forward(self, x):
         return self.net(x)
-
-
-def calc_same_padding(kernel_size):
-    pad = kernel_size // 2
-    return (pad, pad - (kernel_size + 1) % 2)
 
 
 class Transpose(nn.Module):
@@ -163,10 +158,21 @@ class Transpose(nn.Module):
 
 
 class SwiGLU(nn.Module):
-    ## Swish-Applies the gated linear unit function.
+    # Swish-Applies the gated linear unit function.
     def __init__(self, dim=-1):
         super().__init__()
         self.dim = dim
+
     def forward(self, x):
-        out, gate = x.chunk(2, dim=self.dim)
-        return out * F.silu(gate)
+        # out, gate = x.chunk(2, dim=self.dim)
+        # Using torch.split instead of chunk for ONNX export compatibility.
+        out, gate = torch.split(x, x.size(self.dim) // 2, dim=self.dim)
+        gate = F.silu(gate)
+        if x.dtype == torch.float16:
+            out_min, out_max = torch.aminmax(out.detach())
+            gate_min, gate_max = torch.aminmax(gate.detach())
+            max_abs_out = torch.max(-out_min, out_max).float()
+            max_abs_gate = torch.max(-gate_min, gate_max).float()
+            if max_abs_out * max_abs_gate > 1000:
+                return (out.float() * gate.float()).clamp(-1000, 1000).half()
+        return out * gate
