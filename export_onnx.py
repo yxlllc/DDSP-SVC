@@ -626,7 +626,7 @@ class Unit2Wav(nn.Module):
                             use_attention, 
                             use_pitch_aug,
                             f0_min)
-        self.reflow_model = RectifiedFlow(LYNXNet(in_dims=out_dims, dim_cond=out_dims, n_layers=n_layers, n_chans=n_chans), out_dims=out_dims)
+        self.reflow_model = RectifiedFlow(LYNXNet2(in_dims=out_dims, dim_cond=out_dims, n_layers=n_layers, n_chans=n_chans), out_dims=out_dims)
 
 
 class DotDict(dict):
