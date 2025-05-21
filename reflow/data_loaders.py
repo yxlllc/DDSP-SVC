@@ -159,7 +159,7 @@ class AudioDataset(Dataset):
                 dirname_split = re.split(r"_|\-", os.path.dirname(name_ext), 2)[0]
                 spk_id = int(dirname_split) if str.isdigit(dirname_split) else 0
                 if spk_id < 1 or spk_id > n_spk:
-                    raise ValueError(' [x] Muiti-speaker traing error : spk_id must be a positive integer from 1 to n_spk ')
+                    raise ValueError(' [x] Muiti-speaker training error : spk_id must be a positive integer from 1 to n_spk ')
             else:
                 spk_id = 1
             spk_id = torch.LongTensor(np.array([spk_id])).to(device)
