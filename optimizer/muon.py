@@ -7,7 +7,25 @@ from typing import List
 from .chained_optimizer import ChainedOptimizer, OptimizerSpec
 
 
-def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:
+def get_bf16_support_map():
+    bf16_support_map = {}
+
+    if not torch.cuda.is_available():
+        return bf16_support_map
+
+    device_count = torch.cuda.device_count()
+    if device_count == 0:
+        return bf16_support_map
+
+    for i in range(device_count):
+        device = torch.device(f'cuda:{i}')       
+        major, minor = torch.cuda.get_device_capability(device)
+        bf16_support_map[device] = (major >= 8)
+        
+    return bf16_support_map
+    
+    
+def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool) -> Tensor:
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
     quintic iteration whose coefficients are selected to maximize the slope at zero. For the purpose
@@ -19,7 +37,10 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:
     """
     assert G.ndim == 3 # batched Muon implementation by @scottjmaddox, and put into practice in the record by @YouJiacheng
     a, b, c = (3.4445, -4.7750,  2.0315)
-    X = G.float()
+    if use_bf16:
+        X = G.bfloat16()
+    else:
+        X = G.float()
     if G.size(-2) > G.size(-1):
         X = X.mT
 
@@ -63,7 +84,8 @@ class Muon(torch.optim.Optimizer):
     def __init__(self, params, lr=5e-4, weight_decay=0.1, momentum=0.95, nesterov=True, ns_steps=5):
         defaults = dict(lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps)
         super().__init__(params, defaults)
-
+        self.bf16_support_map = get_bf16_support_map()
+        
     @torch.no_grad()
     def step(self, closure=None):
         for group in self.param_groups:
@@ -88,7 +110,8 @@ class Muon(torch.optim.Optimizer):
                 g = g.lerp_(buf, group["momentum"]) if group["nesterov"] else buf
                 if g.ndim >= 4:  # for the case of conv filters
                     g = g.view(g.size(0), g.size(1), -1)
-                g = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
+                use_bf16 = self.bf16_support_map.get(g.device, False)
+                g = zeropower_via_newtonschulz5(g, steps=group["ns_steps"], use_bf16=use_bf16)
                 for i, p in enumerate(group_data["params"]):
                     if group["weight_decay"] > 0:
                         p.data.mul_(1 - group["lr"] * group["weight_decay"])
