@@ -23,10 +23,8 @@ class SwiGLU(nn.Module):
             max_abs_gate = torch.max(-gate_min, gate_max).float()
             max_abs_value = max_abs_out * max_abs_gate
             if max_abs_value > 1000:
-                ratio = 1000 / max_abs_value
-                sqrt_ratio = torch.sqrt(ratio)
-                out = out * sqrt_ratio
-                gate = gate * sqrt_ratio
+                ratio = (1000 / max_abs_value).half()
+                gate *= ratio
                 return (out * gate).clamp(-1000 * ratio, 1000 * ratio) / ratio
         return out * gate
 
