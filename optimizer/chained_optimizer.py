@@ -1,3 +1,4 @@
+import torch
 from torch import Tensor
 from torch.optim import Optimizer
 from torch.optim.optimizer import ParamsT
@@ -87,9 +88,14 @@ class ChainedOptimizer(Optimizer):
                 self.optimizers[optimizer_idx].param_groups[param_group_idx]["lr"] = param_group["lr"]
 
     def step(self, closure=None) -> None:
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
         self._copy_lr_to_optimizers()
         for opt in self.optimizers:
-            opt.step(closure)
+            opt.step(closure=None)
+        return loss
 
     def add_param_group(self, param_group: Dict[str, Any]) -> None:
         super().add_param_group(param_group)
