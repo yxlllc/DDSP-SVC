@@ -36,7 +36,7 @@ DDSP-SVC 是一个开源歌声转换项目，致力于开发可以在个人电�
 pip install -r requirements.txt
 ```
 
-python 3.8 (windows) + cuda 11.8 + torch 2.4.1 + torchaudio 2.4.1 可以运行
+python 3.11 (windows) + cuda 13.0 + torch 2.9.1 + torchaudio 2.9.1 可以运行
 
 ## 2. 配置预训练模型
 

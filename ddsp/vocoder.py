@@ -9,6 +9,7 @@ import torchcrepe
 import resampy
 from transformers import HubertModel, Wav2Vec2FeatureExtractor
 from fairseq import checkpoint_utils
+from fairseq.data import dictionary
 from encoder.hubert.model import HubertSoft
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from torchaudio.transforms import Resample
@@ -16,6 +17,7 @@ from .unit2control import Unit2Control
 from .core import frequency_filter, upsample, remove_above_fmax, MaskedAvgPool1d, MedianPool1d
 import time
 
+torch.serialization.add_safe_globals([dictionary.Dictionary])
 CREPE_RESAMPLE_KERNEL = {}
 F0_KERNEL = {}
 
