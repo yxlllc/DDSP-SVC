@@ -15,6 +15,8 @@ class RMVPE:
         model.load_state_dict(ckpt['model'], strict=False)
         model.eval()
         self.model = model
+        self.hop_length = hop_length
+        self.seg_length = 32 * hop_length
         self.mel_extractor = MelSpectrogram(N_MELS, SAMPLE_RATE, WINDOW_LENGTH, hop_length, None, MEL_FMIN, MEL_FMAX)
         self.resample_kernel = {}
 
@@ -44,9 +46,15 @@ class RMVPE:
                 self.resample_kernel[key_str] = Resample(sample_rate, 16000, lowpass_filter_width=128)
             self.resample_kernel[key_str] = self.resample_kernel[key_str].to(device)
             audio_res = self.resample_kernel[key_str](audio)
+        B, T = audio_res.shape
+        n_frames = T // self.hop_length + 1 
+        T1 = T + self.hop_length
+        T_pad = self.seg_length * ((T1 - 1) // self.seg_length + 1) - T1
+        audio_res = F.pad(audio_res, (0, T_pad))
         mel_extractor = self.mel_extractor.to(device)
         self.model = self.model.to(device)
         mel = mel_extractor(audio_res, center=True)
-        hidden = self.mel2hidden(mel)
-        f0 = self.decode(hidden, thred=thred, use_viterbi=use_viterbi)
+        with torch.no_grad():
+            hidden = self.model(mel)
+        f0 = self.decode(hidden[:, :n_frames], thred=thred, use_viterbi=use_viterbi)
         return f0
