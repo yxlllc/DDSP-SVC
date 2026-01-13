@@ -7,9 +7,7 @@ import pyworld as pw
 import parselmouth
 import torchcrepe
 import resampy
-from transformers import HubertModel, Wav2Vec2FeatureExtractor
-from fairseq import checkpoint_utils
-from fairseq.data import dictionary
+from transformers import HubertModel, HubertConfig, Wav2Vec2FeatureExtractor
 from encoder.hubert.model import HubertSoft
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from torchaudio.transforms import Resample
@@ -17,7 +15,6 @@ from .unit2control import Unit2Control
 from .core import frequency_filter, upsample, remove_above_fmax, MaskedAvgPool1d, MedianPool1d
 import time
 
-torch.serialization.add_safe_globals([dictionary.Dictionary])
 CREPE_RESAMPLE_KERNEL = {}
 F0_KERNEL = {}
 
@@ -172,24 +169,6 @@ class Units_Encoder:
         if encoder == 'hubertsoft':
             self.model = Audio2HubertSoft(encoder_ckpt).to(device)
             is_loaded_encoder = True
-        if encoder == 'hubertbase':
-            self.model = Audio2HubertBase(encoder_ckpt, device=device)
-            is_loaded_encoder = True
-        if encoder == 'hubertbase768':
-            self.model = Audio2HubertBase768(encoder_ckpt, device=device)
-            is_loaded_encoder = True
-        if encoder == 'hubertbase768l12':
-            self.model = Audio2HubertBase768L12(encoder_ckpt, device=device)
-            is_loaded_encoder = True
-        if encoder == 'hubertlarge1024l24':
-            self.model = Audio2HubertLarge1024L24(encoder_ckpt, device=device)
-            is_loaded_encoder = True
-        if encoder == 'contentvec':
-            self.model = Audio2ContentVec(encoder_ckpt, device=device)
-            is_loaded_encoder = True
-        if encoder == 'contentvec768':
-            self.model = Audio2ContentVec768(encoder_ckpt, device=device)
-            is_loaded_encoder = True
         if encoder == 'contentvec768l12':
             self.model = Audio2ContentVec768L12(encoder_ckpt, device=device)
             is_loaded_encoder = True
@@ -231,6 +210,13 @@ class Units_Encoder:
         index = torch.clamp(torch.round(ratio * torch.arange(n_frames).to(self.device)).long(), max = units.size(1) - 1)
         units_aligned = torch.gather(units, 1, index.unsqueeze(0).unsqueeze(-1).repeat([1, 1, units.size(-1)]))
         return units_aligned
+
+
+class HubertModelWithFinalProj(HubertModel):
+    def __init__(self, config):
+        super().__init__(config)
+        self.final_proj = torch.nn.Linear(config.hidden_size, config.classifier_proj_size)
+        
         
 class Audio2HubertSoft(torch.nn.Module):
     def __init__(self, path, h_sample_rate = 16000, h_hop_size = 320):
@@ -249,89 +235,23 @@ class Audio2HubertSoft(torch.nn.Module):
             units = self.hubert.units(audio.unsqueeze(1))
             return units
 
-
-class Audio2ContentVec():
-    def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu'):
-        self.device = device
-        print(' [Encoder Model] Content Vec')
-        print(' [Loading] ' + path)
-        self.models, self.saved_cfg, self.task = checkpoint_utils.load_model_ensemble_and_task([path], suffix="", )
-        self.hubert = self.models[0]
-        self.hubert = self.hubert.to(self.device)
-        self.hubert.eval()
-
-    def __call__(self,
-                 audio):  # B, T
-        # wav_tensor = torch.from_numpy(audio).to(self.device)
-        wav_tensor = audio
-        feats = wav_tensor.view(1, -1)
-        padding_mask = torch.BoolTensor(feats.shape).fill_(False)
-        inputs = {
-            "source": feats.to(wav_tensor.device),
-            "padding_mask": padding_mask.to(wav_tensor.device),
-            "output_layer": 9,  # layer 9
-        }
-        with torch.no_grad():
-            logits = self.hubert.extract_features(**inputs)
-            feats = self.hubert.final_proj(logits[0])
-        units = feats  # .transpose(2, 1)
-        return units
-
-
-class Audio2ContentVec768():
-    def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu'):
-        self.device = device
-        print(' [Encoder Model] Content Vec')
-        print(' [Loading] ' + path)
-        self.models, self.saved_cfg, self.task = checkpoint_utils.load_model_ensemble_and_task([path], suffix="", )
-        self.hubert = self.models[0]
-        self.hubert = self.hubert.to(self.device)
-        self.hubert.eval()
-
-    def __call__(self,
-                 audio):  # B, T
-        # wav_tensor = torch.from_numpy(audio).to(self.device)
-        wav_tensor = audio
-        feats = wav_tensor.view(1, -1)
-        padding_mask = torch.BoolTensor(feats.shape).fill_(False)
-        inputs = {
-            "source": feats.to(wav_tensor.device),
-            "padding_mask": padding_mask.to(wav_tensor.device),
-            "output_layer": 9,  # layer 9
-        }
-        with torch.no_grad():
-            logits = self.hubert.extract_features(**inputs)
-            feats = logits[0]
-        units = feats  # .transpose(2, 1)
-        return units
-
-
+        
 class Audio2ContentVec768L12():
     def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu'):
         self.device = device
         print(' [Encoder Model] Content Vec')
         print(' [Loading] ' + path)
-        self.models, self.saved_cfg, self.task = checkpoint_utils.load_model_ensemble_and_task([path], suffix="", )
-        self.hubert = self.models[0]
+        self.hubert = HubertModelWithFinalProj(HubertConfig())
+        checkpoint = torch.load(path)
+        self.hubert.load_state_dict(checkpoint)
         self.hubert = self.hubert.to(self.device)
         self.hubert.eval()
 
     def __call__(self,
                  audio):  # B, T
-        # wav_tensor = torch.from_numpy(audio).to(self.device)
-        wav_tensor = audio
-        feats = wav_tensor.view(1, -1)
-        padding_mask = torch.BoolTensor(feats.shape).fill_(False)
-        inputs = {
-            "source": feats.to(wav_tensor.device),
-            "padding_mask": padding_mask.to(wav_tensor.device),
-            "output_layer": 12,  # layer 12
-        }
         with torch.no_grad():
-            logits = self.hubert.extract_features(**inputs)
-            feats = logits[0]
-        units = feats  # .transpose(2, 1)
-        return units    
+            feats = self.hubert(audio)["last_hidden_state"]
+        return feats
 
 
 class Audio2ContentVec768L12TTA2X():
@@ -339,26 +259,18 @@ class Audio2ContentVec768L12TTA2X():
         self.device = device
         print(' [Encoder Model] Content Vec')
         print(' [Loading] ' + path)
-        self.models, self.saved_cfg, self.task = checkpoint_utils.load_model_ensemble_and_task([path], suffix="", )
-        self.hubert = self.models[0]
+        self.hubert = HubertModelWithFinalProj(HubertConfig())
+        checkpoint = torch.load(path)
+        self.hubert.load_state_dict(checkpoint)
         self.hubert = self.hubert.to(self.device)
         self.hubert.eval()
 
     def __call__(self,
                  audio):  # B, T
-        # wav_tensor = torch.from_numpy(audio).to(self.device)
-        wav_tensor = audio
-        feats = wav_tensor.view(1, -1)
-        padding_mask = torch.BoolTensor(feats.shape).fill_(False)
-        inputs = {
-            "source": feats.to(wav_tensor.device),
-            "padding_mask": padding_mask.to(wav_tensor.device),
-            "output_layer": 12,  # layer 12
-        }
         with torch.no_grad():
-            feats = self.hubert.extract_features(**inputs)[0]
-            inputs["source"] = F.pad(inputs["source"], (160, 0))
-            feats2 = self.hubert.extract_features(**inputs)[0]
+            feats = self.hubert(audio)["last_hidden_state"]
+            audio = F.pad(audio, (160, 0))
+            feats2 = self.hubert(audio)["last_hidden_state"]
             n = feats2.shape[1] - feats.shape[1]
             if n > 0:
                 feats = F.pad(feats, (0, 0, 0, 1))
@@ -366,8 +278,7 @@ class Audio2ContentVec768L12TTA2X():
             feats_tta = feats_tta[:, 1:, :]
             if n > 0:
                 feats_tta = feats_tta[:, :-1, :]
-        units = feats_tta  # .transpose(2, 1)
-        return units
+        return feats_tta
 
 
 class CNHubertSoftFish(torch.nn.Module):
@@ -407,106 +318,6 @@ class CNHubertSoftFish(torch.nn.Module):
         return features.to(self.device)  # .transpose(1, 2)
 
     
-class Audio2HubertBase():
-    def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu'):
-        self.device = device
-        print(' [Encoder Model] HuBERT Base')
-        print(' [Loading] ' + path)
-        self.models, self.saved_cfg, self.task = checkpoint_utils.load_model_ensemble_and_task([path], suffix="", )
-        self.hubert = self.models[0]
-        self.hubert = self.hubert.to(self.device)
-        self.hubert = self.hubert.float()
-        self.hubert.eval()
-
-    def __call__(self,
-                 audio):  # B, T
-        with torch.no_grad():
-            padding_mask = torch.BoolTensor(audio.shape).fill_(False)
-            inputs = {
-                "source": audio.to(self.device),
-                "padding_mask": padding_mask.to(self.device),
-                "output_layer": 9,  # layer 9
-            }
-            logits = self.hubert.extract_features(**inputs)
-            units = self.hubert.final_proj(logits[0])
-            return units
-
-
-class Audio2HubertBase768():
-    def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu'):
-        self.device = device
-        print(' [Encoder Model] HuBERT Base')
-        print(' [Loading] ' + path)
-        self.models, self.saved_cfg, self.task = checkpoint_utils.load_model_ensemble_and_task([path], suffix="", )
-        self.hubert = self.models[0]
-        self.hubert = self.hubert.to(self.device)
-        self.hubert = self.hubert.float()
-        self.hubert.eval()
-
-    def __call__(self,
-                 audio):  # B, T
-        with torch.no_grad():
-            padding_mask = torch.BoolTensor(audio.shape).fill_(False)
-            inputs = {
-                "source": audio.to(self.device),
-                "padding_mask": padding_mask.to(self.device),
-                "output_layer": 9,  # layer 9
-            }
-            logits = self.hubert.extract_features(**inputs)
-            units = logits[0]
-            return units
-
-
-class Audio2HubertBase768L12():
-    def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu'):
-        self.device = device
-        print(' [Encoder Model] HuBERT Base')
-        print(' [Loading] ' + path)
-        self.models, self.saved_cfg, self.task = checkpoint_utils.load_model_ensemble_and_task([path], suffix="", )
-        self.hubert = self.models[0]
-        self.hubert = self.hubert.to(self.device)
-        self.hubert = self.hubert.float()
-        self.hubert.eval()
-
-    def __call__(self,
-                 audio):  # B, T
-        with torch.no_grad():
-            padding_mask = torch.BoolTensor(audio.shape).fill_(False)
-            inputs = {
-                "source": audio.to(self.device),
-                "padding_mask": padding_mask.to(self.device),
-                "output_layer": 12,  # layer 12
-            }
-            logits = self.hubert.extract_features(**inputs)
-            units = logits[0]
-            return units
-
-
-class Audio2HubertLarge1024L24():
-    def __init__(self, path, h_sample_rate=16000, h_hop_size=320, device='cpu'):
-        self.device = device
-        print(' [Encoder Model] HuBERT Base')
-        print(' [Loading] ' + path)
-        self.models, self.saved_cfg, self.task = checkpoint_utils.load_model_ensemble_and_task([path], suffix="", )
-        self.hubert = self.models[0]
-        self.hubert = self.hubert.to(self.device)
-        self.hubert = self.hubert.float()
-        self.hubert.eval()
-
-    def __call__(self,
-                 audio):  # B, T
-        with torch.no_grad():
-            padding_mask = torch.BoolTensor(audio.shape).fill_(False)
-            inputs = {
-                "source": audio.to(self.device),
-                "padding_mask": padding_mask.to(self.device),
-                "output_layer": 24,  # layer 24
-            }
-            logits = self.hubert.extract_features(**inputs)
-            units = logits[0]
-            return units
-
-
 class DotDict(dict):
     def __getattr__(*args):         
         val = dict.get(*args)         

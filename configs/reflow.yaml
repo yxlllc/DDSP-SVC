@@ -6,12 +6,12 @@ data:
   volume_smooth_size: 1024
   block_size: 512 # Equal to hop_length
   duration: 2 # Audio duration during training, must be less than the duration of the shortest audio clip
-  encoder: 'contentvec768l12tta2x' # 'hubertsoft', 'hubertbase', 'hubertbase768', 'contentvec', 'contentvec768', 'contentvec768l12', 'contentvec768l12tta2x' or 'cnhubertsoftfish'
+  encoder: 'contentvec768l12tta2x' # 'hubertsoft', 'contentvec768l12', 'contentvec768l12tta2x' or 'cnhubertsoftfish'
   cnhubertsoft_gate: 10
   encoder_sample_rate: 16000
   encoder_hop_size: 160 # 160 for 'contentvec768l12tta2x', 320 for any others
   encoder_out_channels: 768 # 256 if using 'hubertsoft'
-  encoder_ckpt: pretrain/contentvec/checkpoint_best_legacy_500.pt
+  encoder_ckpt: pretrain/contentvec/pytorch_model.bin
   train_path: data/train # Create a folder named "audio" under this path and put the audio clip in it
   valid_path: data/val # Create a folder named "audio" under this path and put the audio clip in it
   extensions: # List of extension included in the data collection

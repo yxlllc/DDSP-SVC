@@ -1,4 +1,3 @@
-fairseq
 FreeSimpleGUI
 gin
 gin_config
