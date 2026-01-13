@@ -207,3 +207,5 @@ python gui_reflow.py
 
 * [Diffusion-SVC](https://github.com/CNChTu/Diffusion-SVC)
 
+* [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc)
+

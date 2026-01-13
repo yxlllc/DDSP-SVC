@@ -114,7 +114,6 @@ data/val/audio/ddd.wav
 ## 4. Training
 
 ```bash
-# train a combsub model as an example
 python train_reflow.py -c configs/reflow.yaml
 ```
 
@@ -180,3 +179,5 @@ The front-end uses technologies such as sliding window, cross-fading, SOLA-based
 - [Diff-SVC](https://github.com/prophesier/diff-svc)
 
 - [Diffusion-SVC](https://github.com/CNChTu/Diffusion-SVC)
+
+- [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc)
