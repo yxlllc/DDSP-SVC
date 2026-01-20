@@ -7,6 +7,7 @@ import torch
 import random
 from tqdm import tqdm
 from torch.utils.data import Dataset
+import concurrent.futures
 
 
 def get_npy_shape(file_path):
@@ -137,24 +138,25 @@ class AudioDataset(Dataset):
             print('Load all the data from :', path_root)
         else:
             print('Load the f0, volume data from :', path_root)
-        for name_ext in tqdm(self.paths, total=len(self.paths)):
+        
+        def _load_single_file(name_ext):
             name = os.path.splitext(name_ext)[0]
-            
+
             path_f0 = os.path.join(self.path_root, 'f0', name_ext) + '.npy'
             f0 = np.load(path_f0)
             f0_len = len(f0)
             f0 = torch.from_numpy(f0).float().unsqueeze(-1).to(device)
-                
+
             path_volume = os.path.join(self.path_root, 'volume', name_ext) + '.npy'
             volume = np.load(path_volume)
             volume_len = len(volume)
             volume = torch.from_numpy(volume).float().unsqueeze(-1).to(device)
-            
+
             path_augvol = os.path.join(self.path_root, 'aug_vol', name_ext) + '.npy'
             aug_vol = np.load(path_augvol)
             aug_vol_len = len(aug_vol)
             aug_vol = torch.from_numpy(aug_vol).float().unsqueeze(-1).to(device)
-                        
+
             if n_spk is not None and n_spk > 1:
                 dirname_split = re.split(r"_|\-", os.path.dirname(name_ext), 2)[0]
                 spk_id = int(dirname_split) if str.isdigit(dirname_split) else 0
@@ -163,32 +165,32 @@ class AudioDataset(Dataset):
             else:
                 spk_id = 1
             spk_id = torch.LongTensor(np.array([spk_id])).to(device)
-            
+
             path_mel = os.path.join(self.path_root, 'mel', name_ext) + '.npy'
             path_augmel = os.path.join(self.path_root, 'aug_mel', name_ext) + '.npy'
             path_units = os.path.join(self.path_root, 'units', name_ext) + '.npy'
-            
+
             mel_len = get_npy_shape(path_mel)[0]
             aug_mel_len = get_npy_shape(path_augmel)[0]
             units_len = get_npy_shape(path_units)[0]
             frame_len = min(mel_len, aug_mel_len, units_len, f0_len, volume_len, aug_vol_len)
-            
+
             if load_all_data:
                 mel = np.load(path_mel)
                 mel = torch.from_numpy(mel).to(device)
-                
+
                 aug_mel = np.load(path_augmel)
                 aug_mel = torch.from_numpy(aug_mel).to(device)
-                
+
                 units = np.load(path_units)
                 units = torch.from_numpy(units).to(device)
-                
+
                 if fp16:
                     mel = mel.half()
                     aug_mel = aug_mel.half()
                     units = units.half()
-                    
-                self.data_buffer[name_ext] = {
+
+                data_dict = {
                         'frame_len': frame_len,
                         'mel': mel,
                         'aug_mel': aug_mel,
@@ -199,14 +201,26 @@ class AudioDataset(Dataset):
                         'spk_id': spk_id
                         }
             else:
-                self.data_buffer[name_ext] = {
+                data_dict = {
                         'frame_len': frame_len,
                         'f0': f0,
                         'volume': volume,
                         'aug_vol': aug_vol,
                         'spk_id': spk_id
                         }
-           
+            return name_ext, data_dict
+
+        max_workers = max(min(32, os.cpu_count()), 4)
+        print(f'Using {max_workers} workers for parallel data loading')
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_name = {executor.submit(_load_single_file, name_ext): name_ext for name_ext in self.paths}
+            for future in tqdm(concurrent.futures.as_completed(future_to_name), total=len(self.paths), desc='Loading data'):
+                try:
+                    name_ext, data_dict = future.result()
+                    self.data_buffer[name_ext] = data_dict
+                except Exception as e:
+                    print(f'Error loading {future_to_name[future]}: {e}')
+                    raise
 
     def __getitem__(self, file_idx):
         name_ext = self.paths[file_idx]
@@ -229,8 +243,8 @@ class AudioDataset(Dataset):
         mel = data_buffer.get(mel_key)
         if mel is None:
             mel = os.path.join(self.path_root, mel_key, name_ext) + '.npy'
-            mel = np.load(mel)
-            mel = mel[start_frame : start_frame + units_frame_len]
+            mel = np.load(mel, mmap_mode='r')
+            mel = mel[start_frame : start_frame + units_frame_len].copy()
             mel = torch.from_numpy(mel).float() 
         else:
             mel = mel[start_frame : start_frame + units_frame_len]
@@ -239,8 +253,8 @@ class AudioDataset(Dataset):
         units = data_buffer.get('units')
         if units is None:
             units = os.path.join(self.path_root, 'units', name_ext) + '.npy'
-            units = np.load(units)
-            units = units[start_frame : start_frame + units_frame_len]
+            units = np.load(units, mmap_mode='r')
+            units = units[start_frame : start_frame + units_frame_len].copy()
             units = torch.from_numpy(units).float() 
         else:
             units = units[start_frame : start_frame + units_frame_len]
