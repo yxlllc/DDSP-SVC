@@ -124,7 +124,7 @@ data
 ### 3.2. 执行预处理
 
 ```bash
-python preprocess.py -c configs/reflow.yaml
+python preprocess.py -c configs/reflow.yaml -j <number of processes>
 ```
 
 1. 默认配置适用于 RTX-4060 显卡训练 44.1khz 高采样率合成器。

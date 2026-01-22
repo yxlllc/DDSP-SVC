@@ -61,7 +61,7 @@ to help you select validation data (you can adjust the parameters in `draw.py` t
 Then run the preprocessor:
 
 ```bash
-python preprocess.py -c configs/reflow.yaml
+python preprocess.py -c configs/reflow.yaml -j <number of processes>
 ```
 
 NOTE 1: The default configuration is suitable for with RTX-4060 graphics card.
