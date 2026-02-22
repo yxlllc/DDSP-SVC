@@ -6,6 +6,7 @@ import torch
 import argparse
 import shutil
 import concurrent.futures
+import torch.multiprocessing as mp
 from logger import utils
 from tqdm import tqdm
 from ddsp.vocoder import F0_Extractor, Volume_Extractor, Units_Encoder
@@ -249,6 +250,8 @@ def preprocess(path, args, sample_rate=None, hop_size=None, device='cuda', use_p
 
     
 if __name__ == '__main__':
+    mp.set_start_method('spawn', force=True)
+    
     # parse commands
     cmd = parse_args()
 
