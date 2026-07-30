@@ -5,8 +5,7 @@ import torch
 import librosa
 from logger.saver import Saver
 from logger import utils
-from torch import autocast
-from torch.cuda.amp import GradScaler
+from torch.amp import autocast, GradScaler
 
 def calculate_mel_snr(gt_mel, pred_mel):
     # 计算误差图像
@@ -23,9 +22,9 @@ def calculate_mel_snr(gt_mel, pred_mel):
 def calculate_mel_si_snr(gt_mel, pred_mel):
     # 将测试图像按比例调整以最小化误差
     scale = torch.sum(gt_mel * pred_mel) / torch.sum(gt_mel ** 2)
-    test_image_scaled = scale * pred_mel
+    test_image_scaled = scale * gt_mel
     # 计算误差图像
-    error_image = gt_mel - test_image_scaled
+    error_image = pred_mel - test_image_scaled 
     # 计算参考图像的平方均值
     mean_square_reference = torch.mean(gt_mel ** 2)
     # 计算误差图像的方差
@@ -64,8 +63,8 @@ def test(args, model, vocoder, loader_test, saver):
     # intialization
     num_batches = len(loader_test)
     rtf_all = []
-    spec_min = -2
-    spec_max = 10
+    spec_min = -6
+    spec_max = 6
     spec_range = 12
     
     # run
@@ -285,5 +284,3 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
                 })
                 
                 model.train()
-
-                          

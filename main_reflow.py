@@ -150,7 +150,7 @@ def parse_args(args=None, namespace=None):
         "--t_start",
         type=str,
         required=False,
-        default=0.0,
+        default='auto',
         help="t_start | default: auto",
     )
     return parser.parse_args(args=args, namespace=namespace)
