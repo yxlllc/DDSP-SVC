@@ -8,9 +8,9 @@ DDSP-SVC is an open source singing voice conversion project dedicated to the dev
 
 Compared with the famous [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc), its training and synthesis have much lower requirements for computer hardware, and the training time can be shortened by orders of magnitude, which is close to the training speed of [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI).
 
-In addition, when performing real-time voice changing, the hardware resource consumption of this project is significantly lower than that of SO-VITS-SVC，but probably slightly higher than the latest version of RVC.
+In addition, when performing real-time voice changing, the hardware resource consumption of this project is significantly lower than that of SO-VITS-SVC, but probably slightly higher than the latest version of RVC.
 
-Although the original synthesis quality of DDSP is not ideal (the original output can be heard in tensorboard while training), after enhancing the sound quality with a pre-trained vocoder based enhancer (old version) or with a shallow diffusion model (new version) , for some datasets, it can achieve the synthesis quality no less than SOVITS-SVC and RVC.
+Although the original synthesis quality of DDSP is not ideal, after enhancing the sound quality with a pre-trained vocoder based enhancer (old version), a shallow diffusion model (later versions) or a rectified-flow model (current version), for some datasets, it can achieve the synthesis quality no less than SOVITS-SVC and RVC.
 
 Disclaimer: Please make sure to only train DDSP-SVC models with **legally obtained authorized data**, and do not use these models and any audio they synthesize for illegal purposes. The author of this repository is not responsible for any infringement, fraud and other illegal acts caused by the use of these model checkpoints and audio.
 
@@ -64,9 +64,9 @@ Then run the preprocessor:
 python preprocess.py -c configs/reflow.yaml -j <number of processes>
 ```
 
-NOTE 1: The default configuration is suitable for with RTX-4060 graphics card.
+NOTE 1: The default configuration is suitable for training a 44.1kHz high sampling rate synthesizer with an RTX-4060 graphics card.
 
-NOTE 2: Please keep the sampling rate of all audio clips consistent with the sampling rate in the yaml configuration file ! If it is not consistent, the program can be executed safely, but the resampling during the training process will be very slow.
+NOTE 2: Please keep the sampling rate of all audio clips consistent with the sampling rate in the yaml configuration file ! If it is not consistent, the program can be executed safely, but the resampling during the preprocessing will be very slow.
 
 NOTE 3: The total number of the audio clips for training dataset is recommended to be about 1000, especially long audio clip can be cut into short segments, which will speed up the training, but the duration of all audio clips should not be less than 2 seconds. If there are too many audio clips, you need a large internal-memory or set the 'cache_all_data' option to false in the configuration file.
 
@@ -98,7 +98,7 @@ data/val/audio/2/hhh.wav
 ...
 ```
 
-If 'n_spk' \= 1, The directory structure of the **single speaker** model is still supported, which is like below:
+If 'n_spk' = 1, the directory structure of the **single speaker** model is still supported, which is like below:
 
 ```bash
 # training dataset
@@ -117,7 +117,7 @@ data/val/audio/ddd.wav
 python train_reflow.py -c configs/reflow.yaml
 ```
 
-After training starts, a weight is temporarily saved every ‘interval_val’ step, and a weight is permanently saved every ‘interval_force_save’ step. These two configuration items can be modified according to the situation.
+After training starts, a weight is temporarily saved every 'interval_val' step, and a weight is permanently saved every 'interval_force_save' step. These two configuration items can be modified according to the situation.
 
 You can safely interrupt training, then running the same command line will resume training.
 
@@ -145,10 +145,10 @@ You can use "-mix" option to design your own vocal timbre, below is an example:
 
 ```bash
 # Mix the timbre of 1st and 2nd speaker in a 0.5 to 0.5 ratio
-python main_reflow.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}" -eak 0
+python main_reflow.py -i <input.wav> -m <model_file.pt> -o <output.wav> -k <keychange (semitones)> -mix "{1:0.5, 2:0.5}"
 ```
 
-Other options about the f0 extractor and response threhold，see:
+Other options about the f0 extractor and response threshold, see:
 
 ```bash
 python main_reflow.py -h

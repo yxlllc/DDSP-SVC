@@ -67,7 +67,7 @@ class SvcDDSP:
               audio,
               sample_rate,
               spk_id=1,
-              threhold=-45,
+              threshold=-45,
               pitch_adjust=0,
               formant_shift_key=0,
               use_spk_mix=False,
@@ -112,7 +112,7 @@ class SvcDDSP:
         # extract volume
         volume_extractor = Volume_Extractor(hop_size, win_size)
         volume = volume_extractor.extract(audio)
-        mask = (volume > 10 ** (float(threhold) / 20)).astype('float')
+        mask = (volume > 10 ** (float(threshold) / 20)).astype('float')
         mask = torch.from_numpy(mask).float().to(self.device).unsqueeze(-1).unsqueeze(0)
         mask = upsample(mask, self.args.data.block_size).squeeze(-1)
         volume = torch.from_numpy(volume).float().to(self.device).unsqueeze(-1).unsqueeze(0)
@@ -159,7 +159,7 @@ class Config:
         self.spk_mix_dict = None  # {1:0.5, 2:0.5} 表示1号说话人和2号说话人的音色按照0.5:0.5的比例混合
         self.use_phase_vocoder = False
         self.checkpoint_path = ''
-        self.threhold = -45
+        self.threshold = -45
         self.crossfade_time = 0.04
         self.extra_time = 2
         self.select_pitch_extractor = 'harvest'  # F0预测器["parselmouth", "dio", "harvest", "crepe", "rmvpe", "fcpe"]
@@ -248,7 +248,7 @@ class GUI:
             [sg.Frame(layout=[
                 [sg.Text(i18n("说话人id")), sg.Input(key='spk_id', default_text='1', size=8)],
                 [sg.Text(i18n("响应阈值")),
-                 sg.Slider(range=(-60, 0), orientation='h', key='threhold', resolution=1, default_value=-45,
+                 sg.Slider(range=(-60, 0), orientation='h', key='threshold', resolution=1, default_value=-45,
                            enable_events=True)],
                 [sg.Text(i18n("变调")),
                  sg.Slider(range=(-24, 24), orientation='h', key='pitch', resolution=1, default_value=0,
@@ -314,8 +314,8 @@ class GUI:
                 self.config.sampling_method = values['sampling_method']
             elif event == 'spk_id':
                 self.config.spk_id = int(values['spk_id'])
-            elif event == 'threhold':
-                self.config.threhold = values['threhold']
+            elif event == 'threshold':
+                self.config.threshold = values['threshold']
             elif event == 'pitch':
                 self.config.f_pitch_change = values['pitch']
             elif event == 'formant_shift_key':
@@ -343,7 +343,7 @@ class GUI:
         self.set_devices(values["sg_input_device"], values['sg_output_device'])
         self.config.sounddevices = [values["sg_input_device"], values['sg_output_device']]
         self.config.spk_id = int(values['spk_id'])
-        self.config.threhold = values['threhold']
+        self.config.threshold = values['threshold']
         self.config.f_pitch_change = values['pitch']
         self.config.formant_shift_key = values['formant_shift_key']
         self.config.samplerate = int(values['samplerate'])
@@ -371,7 +371,7 @@ class GUI:
         self.window['sg_input_device'].update(self.config.sounddevices[0])
         self.window['sg_output_device'].update(self.config.sounddevices[1])
         self.window['spk_id'].update(self.config.spk_id)
-        self.window['threhold'].update(self.config.threhold)
+        self.window['threshold'].update(self.config.threshold)
         self.window['pitch'].update(self.config.f_pitch_change)
         self.window['formant_shift_key'].update(self.config.formant_shift_key)
         self.window['samplerate'].update(self.config.samplerate)
@@ -431,7 +431,7 @@ class GUI:
             self.input_wav,
             self.config.samplerate,
             spk_id=self.config.spk_id,
-            threhold=self.config.threhold,
+            threshold=self.config.threshold,
             pitch_adjust=self.config.f_pitch_change,
             formant_shift_key=self.config.formant_shift_key,
             use_spk_mix=self.config.use_spk_mix,

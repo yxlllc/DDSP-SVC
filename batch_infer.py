@@ -178,11 +178,11 @@ def parse_args(args=None, namespace=None):
     )
     parser.add_argument(
         "-th",
-        "--threhold",
+        "--threshold",
         type=str,
         required=False,
         default=-60,
-        help="response threhold (dB) | default: -60",
+        help="response threshold (dB) | default: -60",
     )
     parser.add_argument(
         "-step",
@@ -279,7 +279,7 @@ def infer(input_path, output_path, cmd, device, model, vocoder, args, units_enco
     print('Extracting the volume envelope of the input audio...')
     volume_extractor = Volume_Extractor(hop_size, win_size)
     volume = volume_extractor.extract(audio)
-    mask = (volume > 10 ** (float(cmd.threhold) / 20)).astype('float')
+    mask = (volume > 10 ** (float(cmd.threshold) / 20)).astype('float')
     mask = torch.from_numpy(mask).float().to(device).unsqueeze(-1).unsqueeze(0)
     mask = upsample(mask, args.data.block_size).squeeze(-1)
     volume = torch.from_numpy(volume).float().to(device).unsqueeze(-1).unsqueeze(0)

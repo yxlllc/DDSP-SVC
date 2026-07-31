@@ -6,11 +6,11 @@ Language: [English](./README.md) **简体中文**
 
 DDSP-SVC 是一个开源歌声转换项目，致力于开发可以在个人电脑上普及的自由 AI 变声器软件。
 
-相比于著名的 [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc), 它训练和合成对电脑硬件的要求要低的多，并且训练时长有数量级的缩短，和 [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 的训练速度接近。
+相比于著名的 [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc), 它训练和合成对电脑硬件的要求要低得多，并且训练时长有数量级的缩短，和 [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 的训练速度接近。
 
 另外在进行实时变声时，本项目的硬件资源消耗显著低于 SO-VITS-SVC , 但可能略高于 RVC 最新版本。
 
-虽然 DDSP 的原始合成质量不是很理想（训练时在 tensorboard 中可以听到原始输出），但在使用基于预训练声码器的增强器（老版本）或使用浅扩散模型（新版本）增强音质后，对于部分数据集可以达到不亚于 SOVITS-SVC 和 RVC 的合成质量。
+虽然 DDSP 的原始合成质量不是很理想，但在使用基于预训练声码器的增强器（老版本）、浅扩散模型（后续版本）或整流流模型（当前版本）增强音质后，对于部分数据集可以达到不亚于 SOVITS-SVC 和 RVC 的合成质量。
 
 免责声明：请确保仅使用**合法获得的授权数据**训练 DDSP-SVC 模型，不要将这些模型及其合成的任何音频用于非法目的。 本库作者不对因使用这些模型检查点和音频而造成的任何侵权，诈骗等违法行为负责。
 
@@ -24,11 +24,11 @@ DDSP-SVC 是一个开源歌声转换项目，致力于开发可以在个人电�
 
 5.0 更新：支持更快速的 FCPE 音高提取器，改进 DDSP 模型与扩散模型，提升推理与训练速度，进一步提升合成质量。
 
-6.3 更新：改进 DDSP 模型, 并采用整流流（Rectified-Flow）模型替换扩散模型，进一步提升合成质量，旧模型不再兼容
+6.3 更新：改进 DDSP 模型，并采用整流流（Rectified-Flow）模型替换扩散模型，进一步提升合成质量，旧模型不再兼容。
 
 ## 1. 安装依赖
 
-1. 安装 PyTorch：我们推荐从 [**PyTorch 官方网站 **](https://pytorch.org/) 下载 PyTorch.
+1. 安装 PyTorch：我们推荐从 [**PyTorch 官方网站**](https://pytorch.org/) 下载 PyTorch.
 
 2. 安装依赖
 
@@ -72,7 +72,7 @@ python 3.11 (windows) + cuda 13.0 + torch 2.9.1 + torchaudio 2.9.1 可以运行
 
 2. 程序随机选择：
 
-运行`python draw.py`,程序将帮助你挑选验证集数据（可以调整 `draw.py` 中的参数修改抽取文件的数量等参数）。
+运行`python draw.py`，程序将帮助你挑选验证集数据（可以调整 `draw.py` 中的参数修改抽取文件的数量等参数）。
 
 3. 文件夹结构目录展示：
 
@@ -107,9 +107,9 @@ data
 │    │    │   ├─ ddd.wav
 │    │    │   └─ ....wav
 │    │    └─ ...
-|
+│
 ├─ val
-|    ├─ audio
+│    ├─ audio
 │    │    ├─ 1
 │    │    │   ├─ eee.wav
 │    │    │   ├─ fff.wav
@@ -127,9 +127,9 @@ data
 python preprocess.py -c configs/reflow.yaml -j <number of processes>
 ```
 
-1. 默认配置适用于 RTX-4060 显卡训练 44.1khz 高采样率合成器。
+1. 默认配置适用于 RTX-4060 显卡训练 44.1kHz 高采样率合成器。
 
-2. 请保持所有音频切片的采样率与 yaml 配置文件中的采样率一致！如果不一致，程序可以跑，但训练过程中的重新采样将非常缓慢。（可选：使用 Adobe Audition™ 的响度匹配功能可以一次性完成重采样修改声道和响度匹配。）
+2. 请保持所有音频切片的采样率与 yaml 配置文件中的采样率一致！如果不一致，程序可以跑，但预处理过程中的重新采样将非常缓慢。（可选：使用 Adobe Audition™ 的响度匹配功能可以一次性完成重采样、修改声道和响度匹配。）
 
 3. 训练数据集的音频切片总数建议为约 1000 个，另外长音频切成小段可以加快训练速度，但所有音频切片的时长不应少于 2 秒。如果音频切片太多，则需要较大的内存，配置文件中将 `cache_all_data` 选项设置为 false 可以解决此问题。
 
@@ -137,7 +137,7 @@ python preprocess.py -c configs/reflow.yaml -j <number of processes>
 
 5. 如果您的数据集质量不是很高，请在配置文件中将 'f0_extractor' 设为 'rmvpe'.
 
-6. 配置文件中的 ‘n_spk’ 参数将控制是否训练多说话人模型。如果您要训练**多说话人**模型，为了对说话人进行编号，所有音频文件夹的名称必须是**不大于 ‘n_spk’ 的正整数**。
+6. 配置文件中的 'n_spk' 参数将控制是否训练多说话人模型。如果您要训练**多说话人**模型，为了对说话人进行编号，所有音频文件夹的名称必须是**不大于 'n_spk' 的正整数**。
 
 ## 4. 训练
 
@@ -145,7 +145,7 @@ python preprocess.py -c configs/reflow.yaml -j <number of processes>
 python train_reflow.py -c configs/reflow.yaml
 ```
 
-1. 训练开始后，每 ‘interval_val’ 步临时保存一个权重，每 ‘interval_force_save’ 步永久保存一个权重，可根据情况修改这两个配置项。
+1. 训练开始后，每 'interval_val' 步临时保存一个权重，每 'interval_force_save' 步永久保存一个权重，可根据情况修改这两个配置项。
 
 2. 可以随时中止训练，然后运行相同的命令来从最新保存的权重开始继续训练。
 
