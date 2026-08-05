@@ -1,6 +1,4 @@
 FreeSimpleGUI
-gin
-gin_config
 librosa
 matplotlib
 numpy==1.26.4
