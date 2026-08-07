@@ -133,7 +133,7 @@ class SvcDDSP:
                                     f0,
                                     volume,                                 
                                     spk_id = spk_id, 
-                                    spk_mix_dict = spk_mix_dict,
+                                    spk_mix_dict = dictionary,
                                     aug_shift = formant_shift_key,
                                     vocoder=self.vocoder,
                                     infer=True,
@@ -146,7 +146,7 @@ class SvcDDSP:
             output *= mask[:, -output.shape[-1]:]
             output = output.squeeze()
             if audio_alignment:
-                output[:audio_length]
+                output = output[:audio_length]
             return output, self.args.data.sampling_rate
 
 class Config:

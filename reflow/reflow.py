@@ -72,13 +72,13 @@ class RectifiedFlow(nn.Module):
             # initial condition and step size of the ODE
             if gt_spec is None:
                 x = torch.randn(shape, device=device)
-                t = torch.full((b,), 0, device=device)
-                dt = 1.0 / infer_step 
+                t = torch.full((b,), 0.0, device=device, dtype=torch.float32)
+                dt = 1.0 / infer_step
             else:
                 norm_spec = self.norm_spec(gt_spec)
                 norm_spec = norm_spec.transpose(1, 2)[:, None, :, :] # [B, 1, M, T]
                 x = t_start * norm_spec + (1 - t_start) * torch.randn(shape, device=device)
-                t = torch.full((b,), t_start, device=device)
+                t = torch.full((b,), t_start, device=device, dtype=torch.float32)
                 dt = (1.0 - t_start) / infer_step 
                   
             if method == 'euler':
