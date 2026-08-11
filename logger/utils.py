@@ -1,6 +1,5 @@
 import os
 import yaml
-import json
 import pickle
 import torch
 
@@ -71,17 +70,6 @@ def load_config(path_config):
     args = DotDict(args)
     # print(args)
     return args
-
-
-def to_json(path_params, path_json):
-    params = torch.load(path_params, map_location=torch.device('cpu'))
-    raw_state_dict = {}
-    for k, v in params.items():
-        val = v.flatten().numpy().tolist()
-        raw_state_dict[k] = val
-
-    with open(path_json, 'w') as outfile:
-        json.dump(raw_state_dict, outfile,indent= "\t")
 
 
 def convert_tensor_to_numpy(tensor, is_squeeze=True):
