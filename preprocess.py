@@ -181,14 +181,14 @@ def _process_file(file, path, sample_rate, hop_size, use_pitch_aug, extensions):
         os.makedirs(os.path.dirname(path_unitsfile), exist_ok=True)
         np.save(path_unitsfile, units)
         os.makedirs(os.path.dirname(path_f0file), exist_ok=True)
-        np.save(path_f0file, f0)
+        np.save(path_f0file, f0.astype(np.float32))
         os.makedirs(os.path.dirname(path_volumefile), exist_ok=True)
         np.save(path_volumefile, volume)
         if mel_extractor is not None:
             os.makedirs(os.path.dirname(path_melfile), exist_ok=True)
-            np.save(path_melfile, mel)
+            np.save(path_melfile, np.ascontiguousarray(mel))
             os.makedirs(os.path.dirname(path_augmelfile), exist_ok=True)
-            np.save(path_augmelfile, aug_mel)
+            np.save(path_augmelfile, np.ascontiguousarray(aug_mel))
             os.makedirs(os.path.dirname(path_augvolfile), exist_ok=True)
             np.save(path_augvolfile, aug_vol)
             return keyshift
