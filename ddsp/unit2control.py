@@ -1,8 +1,9 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.utils import weight_norm
-from .model_conformer_naive import ConformerNaiveEncoder
+from reflow.lynxnet2 import LYNXNet2Block
 
 
 def split_to_dict(tensor, tensor_splits):
@@ -27,13 +28,10 @@ class Unit2Control(nn.Module):
             output_splits,
             num_layers=3,
             dim_model=256,
-            use_norm=False,
-            use_attention=False,
-            use_pitch_aug=False):
+            use_pitch_aug=False,
+            glu_type='softsign_glu'):
         super().__init__()
         self.output_splits = output_splits
-        self.f0_embed = nn.Linear(1, dim_model)
-        self.phase_embed = nn.Linear(1, dim_model)
         self.volume_embed = nn.Linear(1, dim_model)
         self.n_spk = n_spk
         if n_spk is not None and n_spk > 1:
@@ -51,17 +49,19 @@ class Unit2Control(nn.Module):
                 weight_norm(nn.Conv1d(2 * block_size, 512, 3, 1, 1)),
                 nn.PReLU(num_parameters=512),
                 weight_norm(nn.Conv1d(512, dim_model, 3, 1, 1)))
-        self.decoder = ConformerNaiveEncoder(
-                num_layers=num_layers,
-                num_heads=8,
-                dim_model=dim_model,
-                use_norm=use_norm,
-                conv_only=not use_attention,
-                conv_dropout=0,
-                atten_dropout=0.1)
-        self.norm = nn.LayerNorm(dim_model)
+        self.residual_layers = nn.ModuleList(
+            [
+                LYNXNet2Block(
+                    dim=dim_model,
+                    expansion_factor=1,
+                    kernel_size=31,
+                    glu_type=glu_type
+                )
+                for i in range(num_layers)
+            ]
+        )
         self.n_out = sum([v for k, v in output_splits.items()])
-        self.dense_out = weight_norm(nn.Linear(dim_model, self.n_out))
+        self.dense_out = nn.Linear(dim_model, self.n_out)
 
     def forward(self, units, source, noise, volume, spk_id = None, spk_mix_dict = None, aug_shift = None):
         
@@ -83,8 +83,9 @@ class Unit2Control(nn.Module):
                 x = x + self.spk_embed(spk_id - 1)
         if self.aug_shift_embed is not None and aug_shift is not None:
             x = x + self.aug_shift_embed(aug_shift / 5)
-        x = self.decoder(x)
-        x = self.norm(x)
+        for layer in self.residual_layers:
+            x = layer(x)
+        x = F.rms_norm(x, (x.size(-1), ))
         e = self.dense_out(x)
         controls = split_to_dict(e, self.output_splits)
     

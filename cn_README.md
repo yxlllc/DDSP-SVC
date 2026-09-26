@@ -26,6 +26,8 @@ DDSP-SVC 是一个开源歌声转换项目，致力于开发可以在个人电�
 
 6.3 更新：改进 DDSP 模型，并采用整流流（Rectified-Flow）模型替换扩散模型，进一步提升合成质量，旧模型不再兼容。
 
+6.5 更新：引入双时间步（dual-timestep）训练，并支持 triton 加速，旧模型不再兼容。
+
 ## 1. 安装依赖
 
 1. 安装 PyTorch：我们推荐从 [**PyTorch 官方网站**](https://pytorch.org/) 下载 PyTorch.
@@ -36,7 +38,7 @@ DDSP-SVC 是一个开源歌声转换项目，致力于开发可以在个人电�
 pip install -r requirements.txt
 ```
 
-python 3.11 (windows) + cuda 13.0 + torch 2.9.1 + torchaudio 2.9.1 可以运行
+python 3.11 (windows) + cuda 13.0 + torch 2.9.1 + torchaudio 2.9.1 + triton-windows 3.7.1.post27 可以运行
 
 ## 2. 配置预训练模型
 

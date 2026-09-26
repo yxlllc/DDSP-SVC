@@ -4,95 +4,50 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Module, Parameter, Embedding
 from typing import List
-from itertools import repeat
+from collections import Counter
 from .chained_optimizer import ChainedOptimizer, OptimizerSpec
 
-coeffs_list = [
-    (8.28721201814563, -23.595886519098837, 17.300387312530933),
-    (4.107059111542203, -2.9478499167379106, 0.5448431082926601),
-    (3.9486908534822946, -2.908902115962949, 0.5518191394370137),
-    (3.3184196573706015, -2.488488024314874, 0.51004894012372),
-    (2.300652019954817, -1.6689039845747493, 0.4188073119525673),
-    (1.891301407787398, -1.2679958271945868, 0.37680408948524835),
-    (1.8750014808534479, -1.2500016453999487, 0.3750001645474248),
-    (1.875, -1.25, 0.375), # subsequent coeffs equal this numerically
-]
-
-# safety factor for numerical stability (but exclude last polynomial )
-coeffs_list = [(a / 1.01 , b / 1.01**3 , c / 1.01**5) for (a, b, c) in coeffs_list[: -1]] + [coeffs_list[-1]]
+from .gram_ns_triton import gram_ns_triton
 
 
-def get_bf16_support_map():
-    bf16_support_map = {}
-
-    if not torch.cuda.is_available():
-        return bf16_support_map
-
-    device_count = torch.cuda.device_count()
-    if device_count == 0:
-        return bf16_support_map
-
-    for i in range(device_count):
-        device = torch.device(f'cuda:{i}')       
-        major, minor = torch.cuda.get_device_capability(device)
-        bf16_support_map[device] = (major >= 8)
-        
-    return bf16_support_map
-    
-
-def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool) -> Tensor:
+def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int]) -> Tensor:
     """
-    Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
-    quintic iteration whose coefficients are selected to maximize the slope at zero. For the purpose
-    of minimizing steps, it turns out to be empirically effective to keep increasing the slope at
-    zero even beyond the point where the iteration no longer converges all the way to one everywhere
-    on the interval. This iteration therefore does not produce UV^T but rather something like US'V^T
-    where S' is diagonal with S_{ii}' ~ Uniform(0.5, 1.5), which turns out not to hurt model
-    performance at all relative to UV^T, where USV^T = G is the SVD.
+    Gram Newton-Schulz iteration to compute the orthogonalization of G.
+    Mathematically identical to standard Newton-Schulz but computes iterating
+    on the smaller NxN Gram matrix to save up to 50% FLOPs.
     """
-    assert G.ndim == 3 # batched Muon implementation by @scottjmaddox, and put into practice in the record by @YouJiacheng
-    #a, b, c = (3.4445, -4.7750,  2.0315)
-    
-    X = G.to(dtype = torch.bfloat16 if use_bf16 else torch.float32)
+    assert G.ndim == 3
 
-    # Ensure spectral norm is at most 1
-    X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-7)
+    X = G.to(dtype=torch.float32)
+    X = F.normalize(X, p=2.0, dim=(-2, -1))
+    X = X.to(dtype=torch.float16)
     
-    # Perform the NS iterations
-    hs = coeffs_list[: steps] + list(repeat(coeffs_list[-1], steps - len(coeffs_list)))
-    if use_bf16:
-        if X.size(-2) < X.size(-1):
-            for a, b, c in hs:
-                A = torch.bmm(X, X.mT)
-                A = torch.baddbmm(A, A, A, beta=b, alpha=c)
-                X = torch.baddbmm(X, A, X, beta=a, alpha=1)
-        else:
-            for a, b, c in hs:
-                A = torch.bmm(X.mT, X)
-                A = torch.baddbmm(A, A, A, beta=b, alpha=c)
-                X = torch.baddbmm(X, X, A, beta=a, alpha=1)
+    a, b, c = (3.4445, -4.7750, 2.0315)
+    
+    if X.size(-2) != X.size(-1):
+        R = torch.bmm(X, X.mT) if X.size(-2) < X.size(-1) else torch.bmm(X.mT, X)
+        Q = None
+        for i in range(steps):
+            if i in reset_iterations and i != 0:
+                X = torch.bmm(Q, X) if X.size(-2) < X.size(-1) else torch.bmm(X, Q)
+                R = torch.bmm(X, X.mT) if X.size(-2) < X.size(-1) else torch.bmm(X.mT, X)
+                Q = None
+            Z = torch.baddbmm(R, R, R, beta=b, alpha=c)
+            if i != 0 and i not in reset_iterations:
+                Q = torch.baddbmm(Q, Q, Z, beta=a, alpha=1.0)
+            else:
+                Q = Z.clone()
+                Q.diagonal(dim1=-2, dim2=-1).add_(a)
+            if i < steps - 1 and (i + 1) not in reset_iterations:
+                RZ = torch.baddbmm(R, R, Z, beta=a, alpha=1.0)
+                R = torch.baddbmm(RZ, Z, RZ, beta=a, alpha=1.0)
+        X = torch.bmm(Q, X) if X.size(-2) < X.size(-1) else torch.bmm(X, Q)
     else:
-        if X.size(-2) < X.size(-1):
-            for a, b, c in hs:
-                d1 = b / 2 / c
-                d0 = a - b * b / 4 / c
-                A = torch.bmm(X, X.mT)
-                A.diagonal(dim1=-2, dim2=-1).add_(d1)
-                A = torch.bmm(A, A)
-                A.mul_(c)
-                A.diagonal(dim1=-2, dim2=-1).add_(d0)
-                X = torch.bmm(A, X)
-        else:
-            for a, b, c in hs:
-                d1 = b / 2 / c
-                d0 = a - b * b / 4 / c
-                A = torch.bmm(X.mT, X)
-                A.diagonal(dim1=-2, dim2=-1).add_(d1)
-                A = torch.bmm(A, A)
-                A.mul_(c)
-                A.diagonal(dim1=-2, dim2=-1).add_(d0)
-                X = torch.bmm(X, A)
-            
+        for _ in range(steps):
+            A = torch.bmm(X, X.mT)
+            B = torch.baddbmm(A, A, A, beta=b, alpha=c)
+            X = torch.baddbmm(X, B, X, beta=a, alpha=1.0)
+
     return X
 
 
@@ -117,12 +72,18 @@ class Muon(torch.optim.Optimizer):
         momentum: The momentum used by the internal SGD.
         nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
         ns_steps: The number of Newton-Schulz iteration steps to use.
+        use_fused_kernels: Run the Gram Newton-Schulz orthogonalization with the fused
+            Triton kernels from gram_ns_triton.py (same numerics: fp16 storage, fp32
+            accumulate) instead of the cuBLAS reference chain, for every CUDA shape
+            group (non-CUDA gradients stay on the reference). When enabled,
+            gram_ns_triton.warmup_gram_ns should run once at startup
+            (train_reflow.py does this under train.use_fused_kernels)
+            so Triton autotune never fires inside a training step.
     """
 
-    def __init__(self, params, lr=5e-4, weight_decay=0.1, momentum=0.95, nesterov=True, ns_steps=5):
-        defaults = dict(lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps)
+    def __init__(self, params, lr=5e-4, weight_decay=0.1, momentum=0.95, nesterov=True, ns_steps=5, reset_iterations=[2], use_fused_kernels=False):
+        defaults = dict(lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps, reset_iterations=reset_iterations, use_fused_kernels=use_fused_kernels)
         super().__init__(params, defaults)
-        self.bf16_support_map = get_bf16_support_map()
     
     @torch.no_grad()
     def step(self, closure=None):
@@ -151,13 +112,16 @@ class Muon(torch.optim.Optimizer):
                 original_shape = g.shape
                 if g.ndim >= 4:  # for the case of conv filters
                     g = g.view(g.size(0), g.size(1), -1)
-                use_bf16 = self.bf16_support_map.get(g.device, False)
-                g = zeropower_via_newtonschulz5(g, steps=group["ns_steps"], use_bf16=use_bf16)
+                use_triton_ns = group["use_fused_kernels"] and g.is_cuda
+                if use_triton_ns:
+                    g = gram_ns_triton(g, steps=group["ns_steps"], reset_iterations=group["reset_iterations"])
+                else:
+                    g = gram_newton_schulz(g, steps=group["ns_steps"], reset_iterations=group["reset_iterations"])
                 if group["weight_decay"] > 0:
                     torch._foreach_mul_(p, 1 - group["lr"] * group["weight_decay"])
                 torch._foreach_add_(p, g.view(original_shape).unbind(0), alpha=-group["lr"] * max(g[0].size()) ** 0.5)
-                
-                
+
+
 def get_params_for_muon(model) -> List[Parameter]:
     """
     Filter parameters of a module into two groups: those that can be optimized by Muon,
@@ -169,12 +133,32 @@ def get_params_for_muon(model) -> List[Parameter]:
     """
     muon_params = []
     for module in model.modules():
-        for param in module.parameters(recurse=False):
+        for name, param in module.named_parameters(recurse=False):
             if not param.requires_grad:
+                continue
+            if name == 'weight_g':
                 continue
             if not isinstance(module, nn.Embedding) and param.ndim >= 2:
                 muon_params.append(param)
     return muon_params
+
+
+def gram_ns_shape_groups(params) -> List[tuple]:
+    """
+    Collapse Muon-eligible parameters into the (B, M, N) shapes that
+    gram_newton_schulz will actually see at optimizer-step time, mirroring the
+    grouping of Muon.step: B = number of params sharing the shape, conv filters
+    (out, in, ...) flattened to (out, in*...). Used by gram_ns_triton.warmup_gram_ns
+    to pre-tune the Triton kernels for exactly these shapes at startup.
+    """
+    groups = Counter()
+    for p in params:
+        if p.ndim >= 3:  # conv filter: (out, in, ...) -> (out, in*...)
+            m, n = p.shape[0], p.numel() // p.shape[0]
+        else:
+            m, n = p.shape
+        groups[(m, n)] += 1
+    return [(count, m, n) for (m, n), count in sorted(groups.items())]
 
 
 class Muon_AdamW(ChainedOptimizer):

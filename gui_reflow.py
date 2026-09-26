@@ -132,7 +132,7 @@ class SvcDDSP:
                                     units,
                                     f0,
                                     volume,                                 
-                                    spk_id = spk_id, 
+                                    spk_id = spk_id,
                                     spk_mix_dict = dictionary,
                                     aug_shift = formant_shift_key,
                                     vocoder=self.vocoder,

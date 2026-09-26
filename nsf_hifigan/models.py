@@ -175,7 +175,7 @@ class SourceModuleHnNSF(torch.nn.Module):
     add_noise_std: std of additive Gaussian noise (default: 0.003)
         note that amplitude of noise in unvoiced is decided
         by sine_amp
-    voiced_threshold: threhold to set U/V given F0 (default: 0)
+    voiced_threshold: threshold to set U/V given F0 (default: 0)
     Sine_source, noise_source = SourceModuleHnNSF(F0_sampled)
     F0_sampled (batchsize, length, 1)
     Sine_source (batchsize, length, 1)

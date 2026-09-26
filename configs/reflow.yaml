@@ -24,10 +24,9 @@ model:
   n_layers: 6
   n_chans: 1024
   t_start: 0.0
-  use_norm: true
-  use_attention: false
-  use_pitch_aug: true 
+  use_pitch_aug: true
   n_spk: 1 # max number of different speakers
+  glu_type: softsign_glu # 'atanglu', 'softsign_glu' or 'double_softsign_glu'
 device: cuda # training device
 vocoder:
   type: 'nsf-hifigan'
@@ -41,6 +40,7 @@ env:
 train:
   num_workers: 2 # If your cpu and gpu are both very strong, set to 0 may be faster!
   amp_dtype: fp16 # fp32, fp16 or bf16 (fp16 or bf16 may be faster if it is supported by your gpu)
+  use_fused_kernels: true # Triton-fused Linear+GLU in LYNXNet2 blocks, and Triton Gram-NS in Muon (needs triton + fp16/bf16; only affects training)
   batch_size: 48
   cache_all_data: true # Save Internal-Memory or Graphics-Memory if it is false, but may be slow
   cache_device: 'cpu' # Set to 'cuda' to cache the data into the Graphics-Memory, fastest speed for strong gpu

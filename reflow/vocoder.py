@@ -37,17 +37,17 @@ def load_model_vocoder(
                     args.data.sampling_rate,
                     args.data.block_size,
                     args.model.win_length,
-                    args.data.encoder_out_channels, 
+                    args.data.encoder_out_channels,
                     args.model.n_spk,
-                    args.model.use_norm,
-                    args.model.use_attention,
                     args.model.use_pitch_aug,
                     vocoder.dimension,
                     args.model.n_aux_layers,
                     args.model.n_aux_chans,
                     args.model.n_layers,
-                    args.model.n_chans)
-                   
+                    args.model.n_chans,
+                    # configs saved before glu_type existed belong to atanglu-trained checkpoints
+                    glu_type=args.model.glu_type if args.model.glu_type is not None else 'atanglu')
+
     else:
         raise ValueError(f" [x] Unknown Model: {args.model.type}")
         
@@ -158,14 +158,13 @@ class Unit2Wav(nn.Module):
             win_length,
             n_unit,
             n_spk,
-            use_norm=False,
-            use_attention=False,
             use_pitch_aug=False,
             out_dims=128,
             n_aux_layers=3,
             n_aux_chans=256,
-            n_layers=6, 
-            n_chans=512):
+            n_layers=6,
+            n_chans=512,
+            glu_type='softsign_glu'):
         super().__init__()
         self.sampling_rate = sampling_rate
         self.block_size = block_size
@@ -177,10 +176,9 @@ class Unit2Wav(nn.Module):
                             n_spk, 
                             n_aux_layers if n_aux_layers is not None else 3,
                             n_aux_chans if n_aux_chans is not None else 256,
-                            use_norm,
-                            use_attention, 
-                            use_pitch_aug)
-        self.reflow_model = RectifiedFlow(LYNXNet2(in_dims=out_dims, dim_cond=out_dims, n_layers=n_layers, n_chans=n_chans), out_dims=out_dims)
+                            use_pitch_aug,
+                            glu_type=glu_type)
+        self.reflow_model = RectifiedFlow(LYNXNet2(in_dims=out_dims, dim_cond=out_dims, n_layers=n_layers, n_chans=n_chans, glu_type=glu_type), out_dims=out_dims)
 
     def forward(self, units, f0, volume, spk_id=None, spk_mix_dict=None, aug_shift=None, vocoder=None,
                 gt_spec=None, infer=True, return_wav=False, infer_step=10, method='euler', t_start=0.0, 

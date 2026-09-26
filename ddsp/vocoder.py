@@ -336,9 +336,8 @@ class CombSubSuperFast(torch.nn.Module):
             n_spk=1,
             num_layers=3,
             dim_model=256,
-            use_norm=False,
-            use_attention=False,
-            use_pitch_aug=False):
+            use_pitch_aug=False,
+            glu_type='softsign_glu'):
         super().__init__()
 
         print(' [DDSP Model] Combtooth Subtractive Synthesiser')
@@ -361,9 +360,8 @@ class CombSubSuperFast(torch.nn.Module):
                             split_map,
                             num_layers=num_layers,
                             dim_model=dim_model,
-                            use_norm=use_norm,
-                            use_attention=use_attention, 
-                            use_pitch_aug=use_pitch_aug)
+                            use_pitch_aug=use_pitch_aug,
+                            glu_type=glu_type)
     
     def fast_source_gen(self, f0_frames):
         n = torch.arange(self.block_size, device=f0_frames.device)

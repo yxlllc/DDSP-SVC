@@ -17,10 +17,11 @@ class RectifiedFlow(nn.Module):
         self.spec_min = spec_min
         self.spec_max = spec_max
     
-    def reflow_loss(self, x_1, t, cond, loss_type='l2_lognorm'):
+    def reflow_loss(self, x_1, t1, cond, t2=None, mask=None, loss_type='l2_lognorm'):
+        t = t1 if mask is None else t1 + (t2 - t1) * mask
         x_0 = torch.randn_like(x_1)
-        x_t = x_0 + t[:, None, None, None] * (x_1 - x_0)
-        v_pred = self.velocity_fn(x_t, 1000 * t, cond)
+        x_t = x_0 + t[:, None, None, :] * (x_1 - x_0)
+        v_pred = self.velocity_fn(x_t, 1000 * t1, cond, None if t2 is None else 1000 * t2, mask)
         
         if loss_type == 'l1':
             loss = (x_1 - x_0 - v_pred).abs().mean()
@@ -28,7 +29,7 @@ class RectifiedFlow(nn.Module):
             loss = F.mse_loss(x_1 - x_0, v_pred)
         elif loss_type == 'l2_lognorm':
             weights = 0.398942 / t / (1 - t) * torch.exp(-0.5 * torch.log(t / ( 1 - t)) ** 2)
-            loss = torch.mean(weights[:, None, None, None] * F.mse_loss(x_1 - x_0, v_pred, reduction='none'))
+            loss = torch.mean(weights[:, None, None, :] * F.mse_loss(x_1 - x_0, v_pred, reduction='none'))
         else:
             raise NotImplementedError()
 
@@ -57,17 +58,21 @@ class RectifiedFlow(nn.Module):
                 t_start=0.0,
                 use_tqdm=True):
         cond = condition.transpose(1, 2) # [B, H, T]
-        b, device = condition.shape[0], condition.device
+        b, _, n_frames = cond.shape
+        device = condition.device
         if t_start < 0.0:
             t_start = 0.0
         if not infer:
             x_1 = self.norm_spec(gt_spec)
             x_1 = x_1.transpose(1, 2)[:, None, :, :]  # [B, 1, M, T]
-            t = t_start + (1.0 - t_start) * torch.rand(b, device=device)
+            t = t_start + (1.0 - t_start) * torch.rand(b, 1, device=device)
             t = torch.clip(t, 1e-7, 1-1e-7)
-            return self.reflow_loss(x_1, t, cond=cond)
+            t2 = t_start + (1.0 - t_start) * torch.rand(b, 1, device=device)
+            t2 = torch.clip(t2, 1e-7, 1-1e-7)
+            mask = (torch.rand(b, n_frames, device=device) < 0.25).float()
+            return self.reflow_loss(x_1, t, cond=cond, t2=t2, mask=mask)
         else:
-            shape = (cond.shape[0], 1, self.out_dims, cond.shape[2]) # [B, 1, M, T]
+            shape = (b, 1, self.out_dims, n_frames) # [B, 1, M, T]
             
             # initial condition and step size of the ODE
             if gt_spec is None:

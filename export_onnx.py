@@ -5,10 +5,33 @@ import torch.nn.functional as F
 
 from torch.nn.utils import weight_norm
 from reflow.reflow import RectifiedFlow
-from reflow.lynxnet2 import LYNXNet2
-from ddsp.model_conformer_naive import ConformerNaiveEncoder
+from reflow.lynxnet2 import LYNXNet2, LYNXNet2Block
 from onnxruntime import InferenceSession
 from nsf_hifigan.nvSTFT import STFT
+
+
+# the TorchScript exporter has no opset-18 symbolic for aten::rms_norm
+# (used by LYNXNet2Block / Unit2Control); decompose it to primitive ops
+def _rms_norm_symbolic(g, input, normalized_shape, weight, eps):
+    from torch.onnx import symbolic_helper
+    # only the number of trailing dims matters; the sizes themselves may be
+    # traced values like x.size(-1) that are not compile-time constants
+    if normalized_shape.node().kind() == "prim::ListConstruct":
+        n_dims = len(list(normalized_shape.node().inputs()))
+    else:
+        n_dims = len(symbolic_helper._parse_arg(normalized_shape, "is"))
+    axes = g.op("Constant", value_t=torch.tensor(list(range(-n_dims, 0)), dtype=torch.int64))
+    mean_sq = g.op("ReduceMean", g.op("Mul", input, input), axes, keepdims_i=1)
+    eps_val = torch.finfo(torch.float32).eps if symbolic_helper._is_none(eps) \
+        else symbolic_helper._parse_arg(eps, "f")
+    mean_sq = g.op("Add", mean_sq, g.op("Constant", value_t=torch.tensor(eps_val, dtype=torch.float32)))
+    out = g.op("Mul", input, g.op("Reciprocal", g.op("Sqrt", mean_sq)))
+    if not symbolic_helper._is_none(weight):
+        out = g.op("Mul", out, weight)
+    return out
+
+
+torch.onnx.register_custom_op_symbolic("aten::rms_norm", _rms_norm_symbolic, 18)
 
 class LinearSpectrogram(nn.Module):
     def __init__(
@@ -216,13 +239,10 @@ class Unit2Control(nn.Module):
             output_splits,
             num_layers=3,
             dim_model=256,
-            use_norm=False,
-            use_attention=False,
-            use_pitch_aug=False):
+            use_pitch_aug=False,
+            glu_type='softsign_glu'):
         super().__init__()
         self.output_splits = output_splits
-        self.f0_embed = nn.Linear(1, dim_model)
-        self.phase_embed = nn.Linear(1, dim_model)
         self.volume_embed = nn.Linear(1, dim_model)
         self.n_spk = n_spk
         if n_spk is not None and n_spk > 1:
@@ -231,7 +251,7 @@ class Unit2Control(nn.Module):
             self.aug_shift_embed = nn.Linear(1, dim_model, bias=False)
         else:
             self.aug_shift_embed = None
-            
+
         self.stack = nn.Sequential(
                 weight_norm(nn.Conv1d(input_channel, 512, 3, 1, 1)),
                 nn.PReLU(num_parameters=512),
@@ -240,21 +260,23 @@ class Unit2Control(nn.Module):
                 weight_norm(nn.Conv1d(2 * block_size, 512, 3, 1, 1)),
                 nn.PReLU(num_parameters=512),
                 weight_norm(nn.Conv1d(512, dim_model, 3, 1, 1)))
-        self.decoder = ConformerNaiveEncoder(
-                num_layers=num_layers,
-                num_heads=8,
-                dim_model=dim_model,
-                use_norm=use_norm,
-                conv_only=not use_attention,
-                conv_dropout=0,
-                atten_dropout=0.1)
-        self.norm = nn.LayerNorm(dim_model)
+        self.residual_layers = nn.ModuleList(
+            [
+                LYNXNet2Block(
+                    dim=dim_model,
+                    expansion_factor=1,
+                    kernel_size=31,
+                    glu_type=glu_type
+                )
+                for i in range(num_layers)
+            ]
+        )
         self.n_out = sum([v for k, v in output_splits.items()])
         self.o_sp_k = [k for k, v in output_splits.items()]
         self.o_sp = [v for k, v in output_splits.items()]
-        self.dense_out = weight_norm(nn.Linear(dim_model, self.n_out))
+        self.dense_out = nn.Linear(dim_model, self.n_out)
         self.gin_channels = dim_model
-        
+
     def export_chara_mix(self, n_spk):
         speaker_map = torch.zeros((n_spk, 1, 1, self.gin_channels))
         for i in range(n_spk):
@@ -274,8 +296,9 @@ class Unit2Control(nn.Module):
             g = torch.sum(g, dim=1).squeeze(0) # [B, N, H]
             x = x + g
 
-        x = self.decoder(x)
-        x = self.norm(x)
+        for layer in self.residual_layers:
+            x = layer(x)
+        x = F.rms_norm(x, (x.size(-1), ))
         e = self.dense_out(x)
         return split_to_(e, self.o_sp)
 
@@ -289,10 +312,9 @@ class CombSubSuperFast(torch.nn.Module):
             n_spk=1,
             num_layers=3,
             dim_model=256,
-            use_norm=False,
-            use_attention=False,
             use_pitch_aug=False,
-            f0_min = 65):
+            f0_min = 65,
+            glu_type='softsign_glu'):
         super().__init__()
 
         print(' [DDSP Model] Combtooth Subtractive Synthesiser')
@@ -318,9 +340,8 @@ class CombSubSuperFast(torch.nn.Module):
                             split_map,
                             num_layers=num_layers,
                             dim_model=dim_model,
-                            use_norm=use_norm,
-                            use_attention=use_attention, 
-                            use_pitch_aug=use_pitch_aug)
+                            use_pitch_aug=use_pitch_aug,
+                            glu_type=glu_type)
         
         self.istft_method = iSTFT(
             win_len = win_length,
@@ -359,10 +380,11 @@ class CombSubSuperFast(torch.nn.Module):
     
     @staticmethod
     def msinc(input):
-        input = np.pi*input
-        output = torch.sin(input)/input
-        #output[torch.abs(input) < 1e-5] = 1.0
-        return output
+        input = np.pi * input
+        is_zero = input == 0
+        # Keep both branches finite: ONNX Where does not short-circuit division.
+        denominator = torch.where(is_zero, torch.ones_like(input), input)
+        return torch.where(is_zero, torch.ones_like(input), torch.sin(input) / denominator)
     
     @staticmethod
     def complex_exp(real, imag):
@@ -407,7 +429,7 @@ class CombSubSuperFast(torch.nn.Module):
         
         volume_frames = volume_frames.unsqueeze(-1)
 
-        combtooth = self.fast_source_gen(f0_frames.unsqueeze(-1))
+        combtooth = self.sfast_source_gen(f0_frames.unsqueeze(-1))
         combtooth_frames = combtooth.unfold(1, self.block_size, self.block_size)
         
         noise_frames = noise.unfold(1, self.block_size, self.block_size)
@@ -460,7 +482,16 @@ class CombSubSuperFast(torch.nn.Module):
                         window = self.window,
                         center = True)
         
-        return STFT(self.sr, 128, self.wl, self.wl, self.bs).get_mel(signal)
+        # Use native sinc/STFT/iSTFT as the reference, with identical mel settings.
+        return STFT(
+            self.melext.sample_rate,
+            self.melext.n_mels,
+            self.melext.n_fft,
+            self.melext.win_length,
+            self.melext.hop_length,
+            self.melext.f_min,
+            self.melext.f_max,
+        ).get_mel(signal, center=self.melext.center)
     
     def tforward(self, units_frames, mel2ph, f0_frames, volume_frames, g=None, noise=None):
         '''
@@ -602,15 +633,14 @@ class Unit2Wav(nn.Module):
             win_length,
             n_unit,
             n_spk,
-            use_norm=False,
-            use_attention=False,
             use_pitch_aug=False,
             out_dims=128,
             n_aux_layers=3,
             n_aux_chans=256,
-            n_layers=6, 
+            n_layers=6,
             n_chans=512,
-            f0_min=65):
+            f0_min=65,
+            glu_type='softsign_glu'):
         super().__init__()
         self.sampling_rate = sampling_rate
         self.block_size = block_size
@@ -622,11 +652,10 @@ class Unit2Wav(nn.Module):
                             n_spk, 
                             n_aux_layers if n_aux_layers is not None else 3,
                             n_aux_chans if n_aux_chans is not None else 256,
-                            use_norm,
-                            use_attention, 
                             use_pitch_aug,
-                            f0_min)
-        self.reflow_model = RectifiedFlow(LYNXNet2(in_dims=out_dims, dim_cond=out_dims, n_layers=n_layers, n_chans=n_chans), out_dims=out_dims)
+                            f0_min,
+                            glu_type=glu_type)
+        self.reflow_model = RectifiedFlow(LYNXNet2(in_dims=out_dims, dim_cond=out_dims, n_layers=n_layers, n_chans=n_chans, glu_type=glu_type), out_dims=out_dims)
 
 
 class DotDict(dict):
@@ -657,6 +686,19 @@ class After(nn.Module):
         return x
 
 
+def _validate_output(name, actual, expected, rtol=1e-3, atol=1e-3):
+    actual = torch.as_tensor(actual).detach().cpu()
+    expected = torch.as_tensor(expected).detach().cpu()
+    if not torch.isfinite(actual).all() or not torch.isfinite(expected).all():
+        raise AssertionError(f"{name}: output or reference contains NaN/Inf")
+    torch.testing.assert_close(
+        actual, expected, rtol=rtol, atol=atol,
+        msg=lambda message: f"{name}: {message}",
+    )
+    print(f" [{name}] max absolute error: {(actual - expected).abs().max().item():.6g}")
+
+
+@torch.no_grad()
 def export_onnx(model_path, output_path):
     config_file = os.path.join(os.path.split(model_path)[0], 'config.yaml')
     with open(config_file, "r") as config:
@@ -666,17 +708,17 @@ def export_onnx(model_path, output_path):
         args.data.sampling_rate,
         args.data.block_size,
         args.model.win_length,
-        args.data.encoder_out_channels, 
+        args.data.encoder_out_channels,
         args.model.n_spk,
-        args.model.use_norm,
-        args.model.use_attention,
         args.model.use_pitch_aug,
         128,
         args.model.n_aux_layers,
         args.model.n_aux_chans,
         args.model.n_layers,
         args.model.n_chans,
-        args.data.f0_min)
+        args.data.f0_min,
+        # configs saved before glu_type existed belong to atanglu-trained checkpoints
+        glu_type=args.model.glu_type if args.model.glu_type is not None else 'atanglu')
     ckpt = torch.load(model_path, map_location=torch.device('cpu'))
     model.to('cpu')
     model.load_state_dict(ckpt['model'], strict=True)
@@ -685,11 +727,13 @@ def export_onnx(model_path, output_path):
     frame_c = 25
     hu = torch.randn((1, frame_c, args.data.encoder_out_channels))
     mel2ph = torch.arange(0, frame_c).long().unsqueeze(0)
-    f0 = torch.randn(1, frame_c)
-    vol = torch.randn(1, frame_c)
+    # A voiced pitch with exact sinc zero crossings exercises the zero guard.
+    f0 = torch.full((1, frame_c), 100.0)
+    vol = torch.rand(1, frame_c) * 0.1
     randn_input = torch.randn(1, frame_c * model.block_size)
 
     n_spk = args.model.n_spk
+    test_sid = None
     if n_spk is not None and n_spk > 1:
         spk_mix = []
         for _ in range(n_spk):
@@ -698,11 +742,13 @@ def export_onnx(model_path, output_path):
         test_sid = test_sid.unsqueeze(0)
         test_sid = test_sid.repeat(frame_c, 1).unsqueeze(0)
         model.ddsp_model.unit2ctrl.export_chara_mix(n_spk)
-        outtest = model.ddsp_model(hu, mel2ph, f0, vol, test_sid, randn_input)
-        a = model.ddsp_model.sforward(hu, mel2ph, f0, vol, test_sid, randn_input)
-        b = model.ddsp_model.tforward(hu, mel2ph, f0, vol, test_sid, randn_input)
-        print(torch.max(torch.abs(b - a)))
-        #print(torch.sum(torch.abs(outtest[0] - model.ddsp_model.sforward(hu, mel2ph, f0, vol, test_sid, randn_input)[0])))
+
+    test_inputs = (hu, mel2ph, f0, vol, test_sid, randn_input)
+    outtest = model.ddsp_model(*test_inputs)
+    reference_mel = model.ddsp_model.sforward(*test_inputs)
+    _validate_output("DDSP mel vs native", outtest[1], reference_mel)
+
+    if n_spk is not None and n_spk > 1:
         torch.onnx.export(
             model.ddsp_model,
             (hu, mel2ph, f0, vol, test_sid, randn_input),
@@ -719,23 +765,11 @@ def export_onnx(model_path, output_path):
             opset_version=18,
             verbose=False,
             input_names=["hubert", "mel2ph", "f0", "volume", "spk_mix", "randn"],
-            output_names=["x", "cond"]
+            output_names=["x", "cond"],
+            dynamo=False
         )
 
-        import onnxruntime as ort
-        sess = ort.InferenceSession(f"{output_path}/encoder.onnx")
-        test = model.ddsp_model.forward(hu, mel2ph, f0, vol, test_sid, randn_input)
-        res = sess.run(None, {
-            "hubert": hu.numpy(),
-            "mel2ph": mel2ph.numpy(),
-            "f0": f0.numpy(),
-            "volume": vol.numpy(),
-            "spk_mix": test_sid.numpy(),
-            "randn": randn_input.numpy()
-        })
-        print(torch.max(torch.abs(torch.tensor(res[0]) - test[0])))
     else:
-        outtest = model.ddsp_model(hu, mel2ph, f0, vol, test_sid, randn_input)
         torch.onnx.export(
             model.ddsp_model,
             (hu, mel2ph, f0, vol, test_sid, randn_input),
@@ -751,10 +785,25 @@ def export_onnx(model_path, output_path):
             opset_version=18,
             verbose=False,
             input_names=["hubert", "mel2ph", "f0", "volume", "randn"],
-            output_names=["x", "cond"]
+            output_names=["x", "cond"],
+            dynamo=False
         )
 
-    t = torch.tensor([0], dtype=torch.int64)
+    sess = InferenceSession(f"{output_path}/encoder.onnx", providers=["CPUExecutionProvider"])
+    ort_inputs = {
+        "hubert": hu.numpy(),
+        "mel2ph": mel2ph.numpy(),
+        "f0": f0.numpy(),
+        "volume": vol.numpy(),
+        "randn": randn_input.numpy(),
+    }
+    if test_sid is not None:
+        ort_inputs["spk_mix"] = test_sid.numpy()
+    res = sess.run(None, ort_inputs)
+    for name, actual, expected in zip(("x", "cond"), res, outtest):
+        _validate_output(f"ONNX encoder {name}", actual, expected)
+
+    t = torch.tensor([0.0], dtype=torch.float32)
     torch.onnx.export(
             model.reflow_model.velocity_fn,
             (outtest[0].cpu(), t.cpu(), outtest[1].cpu()),
@@ -765,10 +814,39 @@ def export_onnx(model_path, output_path):
                 "x": {3: "frame"},
                 "cond": {2: "frame"}
             },
-            opset_version=18
+            opset_version=18,
+            dynamo=False
         )
+
+    velocity = InferenceSession(f"{output_path}/velocity.onnx", providers=["CPUExecutionProvider"])
+    for time_value in (0.0, 333.5, 950.0):
+        t = torch.tensor([time_value], dtype=torch.float32)
+        expected = model.reflow_model.velocity_fn(outtest[0], t, outtest[1])
+        actual = velocity.run(None, {
+            "x": outtest[0].numpy(),
+            "t": t.numpy(),
+            "cond": outtest[1].numpy(),
+        })[0]
+        _validate_output(f"ONNX velocity t={time_value}", actual, expected, rtol=1e-4, atol=1e-4)
     
     return args.data.encoder_out_channels, model.block_size, n_spk
+
+
+def sample_euler(velocity, norm_mel, cond, infer_step=20, t_start=0.0):
+    """Return a normalized mel after sampling, matching RectifiedFlow's initial state."""
+    noise = np.random.randn(*norm_mel.shape).astype(np.float32)
+    x = t_start * norm_mel + (1.0 - t_start) * noise
+    dt = (1.0 - t_start) / infer_step
+    t = np.full((x.shape[0],), t_start, dtype=np.float32)
+    for _ in range(infer_step):
+        output = velocity.run(None, {
+            "x": x,
+            "t": t * np.float32(1000.0),
+            "cond": cond,
+        })[0]
+        x += output * dt
+        t += dt
+    return x
 
 
 if __name__ == "__main__":
@@ -780,8 +858,8 @@ if __name__ == "__main__":
     frame_c = 25
     hu = torch.randn((1, frame_c, oc))                      # units feature, 1 x frame x units
     mel2ph = torch.arange(0, frame_c).long().unsqueeze(0)   # alignment idx, units -> f0, eg. units(1, 5, ...) -> f0(1, 10) [0, 0, 1, 1, 2, 2, 3, 3, 4, 4]
-    f0 = torch.randn(1, frame_c)                            # f0, 1 x frame
-    vol = torch.randn(1, frame_c)                           # volume, 1 x frame
+    f0 = torch.full((1, frame_c), 100.0)                   # f0 in Hz, 1 x frame
+    vol = torch.rand(1, frame_c) * 0.1                     # volume, 1 x frame
     randn_input = torch.randn(1, frame_c * bs)              # noise input, 1 x frame x model.block_size512
     
     if ns is not None and ns > 1:
@@ -808,25 +886,9 @@ if __name__ == "__main__":
             "randn": randn_input.numpy()
         }
     ortout = ortmodel.run(None, ortinput)
-    x = ortout[0]
+    norm_mel = ortout[0]
     cond = ortout[1]
-    dt = 0.05
-    t = np.array([0.0], dtype=np.float32)
-
-    '''
-    def sample_euler(self, x, t, dt, cond):
-        x += self.velocity_fn(x, 1000 * t, cond) * dt
-        t += dt
-        return x, t
-    '''
-    while t[0] <= 1.0:
-        ortout = velocity.run(None, {
-            "x": x,
-            "t": (t * 1000).astype(np.int64),
-            "cond": cond
-        })
-        x += ortout[0] * dt
-        t += dt
+    x = sample_euler(velocity, norm_mel, cond, infer_step=20, t_start=0.0)
 
     pass
     # audio = vocoder(x, f0)
