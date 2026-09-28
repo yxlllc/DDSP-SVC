@@ -46,11 +46,18 @@ def traverse_dir(
 
     
 class DotDict(dict):
-    def __getattr__(*args):         
-        val = dict.get(*args)         
-        return DotDict(val) if type(val) is dict else val   
+    def __getattr__(self, name):
+        # pickle probes for hooks such as __getnewargs_ex__. Returning None for a
+        # missing dunder makes pickle try to call it and fail with "'NoneType'
+        # object is not callable", so dunders must raise AttributeError.
+        # Missing plain keys still return None, which config-compatibility
+        # checks like `n_aux_layers if n_aux_layers is not None else 3` rely on.
+        if name.startswith('__') and name.endswith('__'):
+            raise AttributeError(name)
+        val = dict.get(self, name)
+        return DotDict(val) if type(val) is dict else val
 
-    __setattr__ = dict.__setitem__    
+    __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
 
