@@ -46,6 +46,8 @@ python 3.11 (windows) + cuda 13.0 + torch 2.9.1 + torchaudio 2.9.1 可以运行
 
 (2) 下载预训练 [HubertSoft](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) 编码器并将其放到 `pretrain/hubert` 文件夹，同时修改配置文件。
 
+(3) 下载预训练 [MERT-v1-95M](https://huggingface.co/m-a-p/MERT-v1-95M) 编码器并将其放到 `pretrain/MERT-v1-95M` 文件夹（只需要 `config.json` 与 `pytorch_model.bin`），同时在配置文件中设置 `encoder: 'mert'`、`encoder_sample_rate: 24000`、`encoder_hop_size: 320`、`encoder_ckpt: pretrain/MERT-v1-95M`。这四个值不是相互独立的：MERT 以 24000 Hz 读取音频、每 320 个采样点产出一帧，其余组合会直接报错，而不是在无声中把 units 的时间轴拉错。
+
 * 声码器：
 
 下载并解压预训练 [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/pc-nsf-hifigan-44.1k-hop512-128bin-2025.02/pc_nsf_hifigan_44.1k_hop512_128bin_2025.02.zip) 声码器
