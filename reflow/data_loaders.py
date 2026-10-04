@@ -189,6 +189,17 @@ class AudioDataset(Dataset):
                     mel = mel.half()
                     aug_mel = aug_mel.half()
                     units = units.half()
+                else:
+                    # Do not rely on np.load's dtype. With preprocess.py's
+                    # --store_dtype fp16 these files are fp16 on disk, and
+                    # feeding fp16 tensors into fp32 model weights fails in
+                    # conv1d with "Input type (struct c10::Half) and bias type
+                    # (float) should be the same" -- reachable through the
+                    # validation dataset, which is built with fp16=False and
+                    # runs test() without autocast.
+                    mel = mel.float()
+                    aug_mel = aug_mel.float()
+                    units = units.float()
 
                 data_dict = {
                         'frame_len': frame_len,
