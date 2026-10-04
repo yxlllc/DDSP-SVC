@@ -37,6 +37,14 @@ def parse_args(args=None, namespace=None):
         default=2,
         required=False,
         help="number of worker processes (default: 2)")
+    parser.add_argument(
+        "--store_dtype",
+        type=str,
+        choices=['fp32', 'fp16'],
+        default='fp32',
+        required=False,
+        help="dtype for the units/mel/aug_mel .npy files; f0/volume/aug_vol are "
+             "always fp32 | default: fp32")
     return parser.parse_args(args=args, namespace=namespace)
 
 
@@ -84,12 +92,19 @@ _worker_volume_extractor = None
 _worker_mel_extractor = None
 _worker_units_encoder = None
 _worker_device = None
+_worker_store_dtype = None
 
 
-def _worker_init(args, device):
+def _dtype_cast(arr, dtype):
+    """Cast to the requested dtype and guarantee C-contiguity for np.save."""
+    return np.ascontiguousarray(arr, dtype=dtype)
+
+
+def _worker_init(args, device, store_dtype):
     """Initialize extractors for each worker process."""
-    global _worker_f0_extractor, _worker_volume_extractor, _worker_mel_extractor, _worker_units_encoder, _worker_device
+    global _worker_f0_extractor, _worker_volume_extractor, _worker_mel_extractor, _worker_units_encoder, _worker_device, _worker_store_dtype
     _worker_device = device
+    _worker_store_dtype = store_dtype
     _worker_f0_extractor, _worker_volume_extractor, _worker_mel_extractor, _worker_units_encoder = load_extractors(
         args, device=device)
 
@@ -177,20 +192,26 @@ def _process_file(file, path, sample_rate, hop_size, use_pitch_aug, extensions):
         # interpolate the unvoiced f0
         f0[uv] = np.interp(np.where(uv)[0], np.where(~uv)[0], f0[~uv])
 
-        # save npy     
+        # save npy
+        # Only units/mel/aug_mel honour --store_dtype. Training already halves
+        # exactly those three when train.cache_fp16 is set, so storing them as
+        # fp16 changes nothing there while cutting the disk footprint by ~40%.
+        # f0/volume/aug_vol stay fp32: they are small, and quantizing them would
+        # introduce error that the training path never had.
+        store_dtype = _worker_store_dtype or np.float32
         os.makedirs(os.path.dirname(path_unitsfile), exist_ok=True)
-        np.save(path_unitsfile, units)
+        np.save(path_unitsfile, _dtype_cast(units, store_dtype))
         os.makedirs(os.path.dirname(path_f0file), exist_ok=True)
-        np.save(path_f0file, f0.astype(np.float32))
+        np.save(path_f0file, _dtype_cast(f0, np.float32))
         os.makedirs(os.path.dirname(path_volumefile), exist_ok=True)
-        np.save(path_volumefile, volume)
+        np.save(path_volumefile, _dtype_cast(volume, np.float32))
         if mel_extractor is not None:
             os.makedirs(os.path.dirname(path_melfile), exist_ok=True)
-            np.save(path_melfile, np.ascontiguousarray(mel))
+            np.save(path_melfile, _dtype_cast(mel, store_dtype))
             os.makedirs(os.path.dirname(path_augmelfile), exist_ok=True)
-            np.save(path_augmelfile, np.ascontiguousarray(aug_mel))
+            np.save(path_augmelfile, _dtype_cast(aug_mel, store_dtype))
             os.makedirs(os.path.dirname(path_augvolfile), exist_ok=True)
-            np.save(path_augvolfile, aug_vol)
+            np.save(path_augvolfile, _dtype_cast(aug_vol, np.float32))
             return keyshift
     else:
         print('\n[Error] F0 extraction failed: ' + path_srcfile)
@@ -200,7 +221,7 @@ def _process_file(file, path, sample_rate, hop_size, use_pitch_aug, extensions):
     return None
 
 
-def preprocess(path, args, sample_rate=None, hop_size=None, device='cuda', use_pitch_aug=False, extensions=['wav'], workers=1):
+def preprocess(path, args, sample_rate=None, hop_size=None, device='cuda', use_pitch_aug=False, extensions=['wav'], workers=1, store_dtype=None):
     # List files
     path_srcdir = os.path.join(path, 'audio')
     filelist = traverse_dir(
@@ -217,7 +238,7 @@ def preprocess(path, args, sample_rate=None, hop_size=None, device='cuda', use_p
         hop_size = args.data.block_size
 
     # Prepare arguments for worker initialization
-    init_args = (args, device)
+    init_args = (args, device, store_dtype)
 
     # Multiprocessing with ProcessPoolExecutor
     pitch_aug_dict = {}
@@ -271,7 +292,10 @@ if __name__ == '__main__':
     
     # get number of workers
     workers = cmd.workers
-    print(f'Using {workers} worker processes')   
+    print(f'Using {workers} worker processes')
+
+    store_dtype = np.float16 if cmd.store_dtype == 'fp16' else np.float32
+    print(f'Storing units/mel/aug_mel as {cmd.store_dtype}')
 
     # parallel processing
     preprocess(train_path,
@@ -281,7 +305,8 @@ if __name__ == '__main__':
                device=device,
                use_pitch_aug=use_pitch_aug,
                extensions=extensions,
-               workers=workers)
+               workers=workers,
+               store_dtype=store_dtype)
 
     # preprocess validation set (no pitch augmentation)
     preprocess(valid_path,
@@ -291,4 +316,5 @@ if __name__ == '__main__':
                device=device,
                use_pitch_aug=False,
                extensions=extensions,
-               workers=workers)
+               workers=workers,
+               store_dtype=store_dtype)
