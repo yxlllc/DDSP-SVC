@@ -34,6 +34,8 @@ python 3.11 (windows) + cuda 13.0 + torch 2.9.1 + torchaudio 2.9.1 works.
 
 (2) Download the pre-trained [HubertSoft](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) encoder and put it under `pretrain/hubert` folder, and then modify the configuration file at the same time.
 
+(3) Download the pre-trained [MERT-v1-95M](https://huggingface.co/m-a-p/MERT-v1-95M) encoder and put it under `pretrain/MERT-v1-95M` folder (only `config.json` and `pytorch_model.bin` are needed), then set `encoder: 'mert'`, `encoder_sample_rate: 24000`, `encoder_hop_size: 320` and `encoder_ckpt: pretrain/MERT-v1-95M` in the configuration file. These four values are not independent: MERT reads audio at 24000 Hz and produces one frame per 320 samples, and any other combination is rejected with an error rather than silently time-warping the units.
+
 - Vocoder:
 
 Download and unzip the pre-trained [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/pc-nsf-hifigan-44.1k-hop512-128bin-2025.02/pc_nsf_hifigan_44.1k_hop512_128bin_2025.02.zip) vocoder 
