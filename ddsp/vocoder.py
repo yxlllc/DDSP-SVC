@@ -1,4 +1,5 @@
 import os
+import json
 import numpy as np
 import yaml
 import torch
@@ -175,6 +176,20 @@ class Units_Encoder:
         if encoder == 'contentvec768l12tta2x':
             self.model = Audio2ContentVec768L12TTA2X(encoder_ckpt, device=device)
             is_loaded_encoder = True
+        if encoder == 'mert':
+            # MERT consumes audio at 24000 Hz and emits one frame per 320 samples.
+            # Other declared geometries do not fail on their own -- they silently
+            # time-warp the units: leaving encoder_sample_rate at the repo default
+            # of 16000 gives ~42% duplicate frames, and using the data sampling
+            # rate (44100) gives fully warped content with no visible symptom at
+            # all. Fail loudly instead.
+            if (encoder_sample_rate, encoder_hop_size) != (24000, 320):
+                raise ValueError(
+                    f' [x] the mert encoder requires encoder_sample_rate=24000 and '
+                    f'encoder_hop_size=320, but got {encoder_sample_rate} and '
+                    f'{encoder_hop_size}')
+            self.model = Audio2MERT(encoder_ckpt, device=device)
+            is_loaded_encoder = True
         if encoder == 'cnhubertsoftfish':
             self.model = CNHubertSoftFish(encoder_ckpt, device=device, gate_size=cnhubertsoft_gate)
             is_loaded_encoder = True
@@ -279,6 +294,54 @@ class Audio2ContentVec768L12TTA2X():
             if n > 0:
                 feats_tta = feats_tta[:, :-1, :]
         return feats_tta
+
+
+class Audio2MERT():
+    """MERT-v1-95M content encoder.
+
+    MERT-v1-95M is architecturally identical to HuBERT-base: conv stack
+    [10,3,3,3,3,2,2] / [5,2,2,2,2,2,2], hidden 768, 12 layers, 12 heads,
+    intermediate 3072. The only difference from ContentVec is the 24000 Hz
+    input rate. The extensions in MERT's own `modeling_MERT.py` (deepnorm,
+    attention_relax) are both disabled in this checkpoint -- `deepnorm: false`
+    and `attention_relax: -1.0` in its config.json -- so those classes are
+    never instantiated and the executed path is the stock `HubertEncoder`.
+    That lets us reuse `transformers.HubertModel` directly and avoids
+    `trust_remote_code` entirely.
+    """
+    def __init__(self, path, h_sample_rate = 24000, h_hop_size = 320, device = 'cpu'):
+        self.device = device
+        print(' [Encoder Model] MERT')
+        if os.path.isfile(path):  # accept either the directory or the .bin inside it
+            path = os.path.dirname(path)
+        print(' [Loading] ' + path)
+
+        with open(os.path.join(path, 'config.json'), encoding='utf-8') as f:
+            config_dict = json.load(f)
+        # MERT's model_type is 'mert_model', which HubertConfig does not know.
+        # Its extra keys (feature_extractor_cqt, attention_relax, deepnorm, ...)
+        # are accepted by PretrainedConfig and simply never read, so they do not
+        # affect the forward pass.
+        config_dict['model_type'] = 'hubert'
+        self.hubert = HubertModel(HubertConfig(**config_dict))
+
+        checkpoint = torch.load(os.path.join(path, 'pytorch_model.bin'), map_location='cpu')
+        self.hubert.load_state_dict(checkpoint)
+        self.hubert = self.hubert.to(self.device)
+        self.hubert.eval()
+
+    def __call__(self,
+                 audio):  # B, T
+        with torch.no_grad():
+            # MERT's preprocessor_config.json sets do_normalize: true, i.e.
+            # per-sample zero-mean unit-variance normalization. That is part of
+            # the official recipe, so we apply it here. The ContentVec branch
+            # deliberately does no normalization -- each encoder follows its own
+            # published usage.
+            audio = (audio - audio.mean(dim=-1, keepdim=True)) / \
+                    torch.sqrt(audio.var(dim=-1, keepdim=True, unbiased=False) + 1e-7)
+            feats = self.hubert(audio)["last_hidden_state"]
+        return feats
 
 
 class CNHubertSoftFish(torch.nn.Module):
